@@ -1,0 +1,7 @@
+DOCUMENTATION
+  Please use "pydoc ./wwibcheck" to generate documentation.
+
+
+PREREQUISITE
+  1. infiniband-diags
+  2. Graphviz and pydot (optional, for visualizing topology only)

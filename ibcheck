@@ -1,0 +1,1757 @@
+#!/usr/bin/env python
+"""Swiss army knife for Infiniband (IB) troubleshooting.
+
+############################################################################
+#                                                                          #
+# Copyright (c) 2010-2012, The Regents of the University of California,    #
+# through Lawrence Berkeley National Laboratory (subject to receipt of any #
+# required approvals from the U.S. Dept. of Energy).  All rights reserved. #
+#                                                                          #
+#                                                                          #
+# Author: Yong Qin <yong.qin@lbl.gov>                                      #
+#         High Performance Computing Services (http://scs.lbl.gov/)        #
+#                                                                          #
+############################################################################
+
+
+IBCHECK is a utility that uses the standard tools provided by OFED 
+infiniband-diags package to perform comprehensive in-band IB troubleshooting.
+
+
+IBCHECK modules:
+  1. Topology analyzer.
+  2. Subnet Manager (SM) scanner.
+  3. Performance Manager (PM) scanner.
+
+
+IBCHECK files:
+  1. Fabric definition file - supplied with "-f" or "-c" option.
+
+     Fabric definition file provides a key/value pair definition for a given
+     GUID/NodeDesc (node description) mapping.  It can also be organized as
+     virtual clusters which is useful when used with "-C" option. E.g.,
+
+       [lustre]
+       0x0005ad00001df29a=ib000.lustre (Cisco SFS7000D, W29-36)
+       0x0002c9020028ea84=n0000.lustre (mds00)
+       0x00066a0098009c8a=n0002.lustre (oss00)
+       0x0005ad00000c6410=n0003.lustre (oss01)
+       ...
+
+  2. Topology definition file - supplied with "-t" option.
+
+     Topology definition file has the same format as the output from
+     "ibnetdiscover" command.  When this file is provided, IBCHECK will perform
+     topology comparison (see topology analyzer section for details).  The best
+     practice for creating such file would be during the fabric bring-up stage 
+     after everything is tested and confirmed in a good working manner.  One
+     can use the following command to generate this file.
+
+       $ ibnetdiscover > ibnetdiscover_myfabric.txt
+
+
+IBCHECK fabric selection:
+  By default all devices on the fabric are selected to perform an action.  
+However the following options can also be used to further narrow down the 
+portion of the fabric to work with.
+
+  1. By pre-defined virtual cluster in the fabric file: -C <CLUSTER>
+  2. By device type: -T <TYPE>
+  3. By spine index: -S <SPINE>
+  4. By leaf/line index: -L <LEAF>
+  5. By NodeDesc: -N <NODEDESC>
+  6. By GUID: -g <GUID>
+  7. By LID: -l <LID>
+  8. By link speed: -s <SPEED>
+  9  By link width: -w <WIDTH>
+
+  One can also use the "-A" option to switch from the default "or" operation 
+to an "and" operation to further manipulate the selection.  In complicated 
+environment, it is recommended to construct a virtual cluster and use "-C" 
+to control the target selection.
+
+
+IBCHECK detail level:
+  Detail level ("-d") option can be stacked and controls the granularity of the 
+action.  "-d" has the same controllability as without providing a detail level, 
+which presents all devices that are selected (see the fabric selection section).
+"-dd" presents all ports with a link on the selected devices.  "-ddd" presents 
+all ports on the selected devices regardless whether there is a link or not.  
+Behavior for more than 3 levels of details ("-ddd") is not defined.
+
+
+IBCHECK topology analyzer:
+  Topology analysis is always performed.  Depending on the detail level that 
+IBCHECK is provided, it shows different level of details of the fabric.
+
+  If a topology file is provided, IBCHECK will compare the current physical 
+fabric with the fabric defined in the topology file to identify differences.  
+It is useful when troubleshooting large fabric with dead/missing links or ib 
+devices, or comparing the fabric changes.
+
+  Topology analyzer also has a visualization component ("-G") which requires
+graphviz and pydot packages to be available.  This feature is experimental.
+
+  It can also be run in the "dryrun" mode ("-D"), which requires a topology
+file (provided with "-t" option).  In this mode it does not try to retrieve
+the physical fabric topology but perform analysis only on the provided file,
+which is useful in offline analysis and visualization.
+
+
+IBCHECK SM scanner:
+  SM scanner is activated with "-M" option on selected devices.  Note that
+a detail level setting controls its behavior as well.  If "-d" is used, only
+device level scanning is performed, which could lead to less information than 
+expected, as the device GUID for HCA could be different from its port GUID, 
+which a host-based SM typically runs on.  Thus "-dd" is recommended in all 
+situations for the SM scanner.  "-ddd" leads to scanning of empty ports 
+without a link, which is not necessary.
+
+
+IBCHECK PM scanner:
+  PM scanner ("-E") has two running modes: 1). Monitor mode; 2). Batch mode.
+
+  Monitor mode is default and it launches a text-based user interface (TUI) 
+with an embedded mini help page.  One can use the 'h' key to activate it.  Keys 
+'[0-9]' and '[a-f]' can be used to toggle different error/performance counters 
+to show.  Arrow keys and 'n', 'p', ',', '.', PgUp/PgDn can be used to scroll 
+up/down, and left/right if the display is out of range.  'q' quits from the 
+Monitor mode. Space bar switches between showing devices/ports with error 
+counters above the thresholds and all devices/ports (similar to "-a" option).
+
+  Batch mode ("-b") performs the same type of PM scan, but it displays results 
+in a loggable way, which can be used for offline analysis, such as trending 
+analysis.  In Batch mode, all error/performance counters are displayed.
+
+  One can also reset the counters on the selected devices/ports.  In the monitor
+mode, this can be done by pressing the 'r' key; in the batch mode, "-r" achieves
+the same goal.
+
+  By default PM scanner only displays IB devices with error counters greater 
+than the preset thresholds.  This can be turned off by supplying "-a" option.  
+Also by default it runs with all available cores on the host. This behavior can
+be adjusted by providing "-p <THREADS>" option, which controls how many 
+background processes to spawn.  The default scan interval is 60 seconds, and it
+can be changed with "-i <INTERVAL>".  In an online monitoring mode, "-i 5" gives
+a good refresh rate.  However in the batch mode, "-i 300" or greater can be 
+used as a good practice.  Another option "-n <ITERATIONS>" controls how many 
+times the PM scanner should be run in the batch mode.
+
+  Again, "-dd" is recommended for PM scanner module in all cases.
+
+
+Examples:
+  1. wwibcheck -h
+     Display the help page.
+
+  2. wwibcheck
+     Sweep the fabric, display device counts.
+
+  3. wwibcheck -d
+     Sweep the fabric, display all devices found.
+
+  4. wwibcheck -dd
+     Sweep the fabric, display all devices, as well as active ports.
+
+  5. wwibcheck -ddd
+     Sweep the fabric, display all devices and all ports.
+
+  6. wwibcheck -N n0000 -d
+     Display all devices on the fabric with a node description starting with
+     "n0000".
+
+  7. wwibcheck -f fabrics.conf -d
+     Display all devices, use their designated node description defined in 
+     fabrics.conf
+
+  8. wwibcheck -f fabrics.conf -N n0000 -d
+     Display all devices with a node description starting with "n0000", use 
+     their designated node descriptions.
+
+  9. wwibcheck -f fabrics.conf -N n0000.lr -d
+     Display device which has a node description "n0000.lr" defined in 
+     fabrics.conf
+
+  10. wwibcheck -f fabrics.conf -t ibnetdiscover_lr.txt
+      Sweep the fabric, compare it with the fabric defined in 
+      "ibnetdiscover_lr.txt".  This helps to identify dead links/devices
+      immediately.
+
+  11. wwibcheck -f fabrics.conf -C lr -d
+      Sweep the fabric, only show devices defined in virtual cluster "lr".
+
+  12. wwibcheck -f fabrics.conf -N ib000.lr,n0000.lr -d
+      Only display devices "ib000.lr" and "n0000.lr".
+
+  13. wwibcheck -f fabrics.conf -g 0x0002c90200431448 -d
+      Only display device with a GUID "0x0002c90200431448".
+
+  14. wwibcheck -f fabrics.conf -l 32 -d
+      Only display device with a LID "32".
+
+  15. wwibcheck -f fabrics.conf -dd -M
+      Scan and display all subnet managers on the fabric.
+
+  16. wwibcheck -f fabrics.conf -dd -E
+      Activate the Monitor mode of the PM scanner, run with a 60 seconds
+      interval, until 'q' is pressed.
+
+  17. wwibcheck -f fabrics.conf -dd -C lr -E -i5
+      Monitor the error counters of the virtual cluster "lr", with a scan
+      interval of 5 seconds.
+
+  18. wwibcheck -f fabrics.conf -dd -C lr -E -b
+      Activate the Batch mode of the PM scanner on the virtual cluster "lr", 
+      run once and exit.
+
+  19. wwibcheck -f fabrics.conf -dd -C lr -E -b -i5 -n3
+      Run PM scanner in Batch mode, run 3 times with a scan interval of 5 
+      seconds.
+
+  20. wwibcheck -f fabrics.conf -dd -C lr -E -r -i5
+      Reset error counters on the virtual cluster "lr", then start PM scanner 
+      in Monitor mode with a scan interval of 5 seconds.
+
+
+"""
+
+__author__ = "Yong Qin <yong.qin@lbl.gov>"
+__date__ = "September 14, 2012"
+__version__ = "0.1"
+
+import ConfigParser
+import curses
+import datetime
+import getopt
+import os
+import pydoc
+import Queue
+import re
+import signal
+import subprocess
+import sys
+import threading
+import time
+import traceback
+
+# pydot
+try:
+  import pydot
+  WITH_PYDOT = True
+except ImportError:
+  print >> sys.stderr, 'Warning: Cannot import \'pydot\''
+  WITH_PYDOT = False
+
+# root
+if os.geteuid() == 0:
+  WITH_ROOT = True
+else:
+  WITH_ROOT = False
+
+
+# global definitions
+# ibnode nodetypes - the main categories that the topology uses
+ibnode_nodetype = ['Switch', 'Ca']
+
+# ibnode types - subcategories to organize different device types
+ibnode_type = ['Switch', 'Spine', 'Leaf', 'Line', 'Ca']
+
+# different categories that ibnodes will be organized into
+collect_list = ['nodedesc', 'desc', 'nodeguid', 'nodelid', 'type', 'portguid', \
+                'portlid', 'speed', 'width']
+
+# performance counters
+ibperf_err1 = ['LinkDowned', 'LinkIntegrityErrors', 'LinkRecovers', \
+               'RcvErrors', 'SymbolErrors', 'VL15Dropped', 'XmtDiscards']
+ibperf_err2 = ['ExcBufOverrunErrors', 'RcvConstraintErrors', \
+               'RcvRemotePhysErrors', 'RcvSwRelayErrors', 'XmtConstraintErrors']
+ibperf_data = ['RcvData', 'RcvPkts', 'XmtData', 'XmtPkts']
+ibperf_errs = ibperf_err1 + ibperf_err2
+ibperf_counters = ibperf_errs + ibperf_data
+ibperf_hash = { \
+               'ExcessiveBufferOverrunErrors' : 'ExcBufOverrunErrors', \
+               'LinkDownedCounter'            : 'LinkDowned', \
+               'LinkErrorRecoveryCounter'     : 'LinkRecovers', \
+               'LocalLinkIntegrityErrors'     : 'LinkIntegrityErrors', \
+               'PortRcvConstraintErrors'      : 'RcvConstraintErrors', \
+               'PortRcvData'                  : 'RcvData', \
+               'PortRcvErrors'                : 'RcvErrors', \
+               'PortRcvPkts'                  : 'RcvPkts', \
+               'PortRcvRemotePhysicalErrors'  : 'RcvRemotePhysErrors', \
+               'PortRcvSwitchRelayErrors'     : 'RcvSwRelayErrors', \
+               'PortXmitConstraintErrors'     : 'XmtConstraintErrors', \
+               'PortXmitData'                 : 'XmtData', \
+               'PortXmitDiscards'             : 'XmtDiscards', \
+               'PortXmitPkts'                 : 'XmtPkts', \
+               'PortXmitWait'                 : 'XmtWait', \
+               'SymbolErrorCounter'           : 'SymbolErrors', \
+               'VL15Dropped'                  : 'VL15Dropped', \
+              }
+
+# thresholds for performance counters (ibperf_err1 + ibperf_err2)
+ibperf_errs_threshold = {'ExcBufOverrunErrors' : 10,
+                         'LinkDowned'          : 10,
+                         'LinkIntegrityErrors' : 10,
+                         'LinkRecovers'        : 10,
+                         'RcvConstraintErrors' : 100,
+                         'RcvErrors'           : 10,
+                         'RcvRemotePhysErrors' : 100,
+                         'RcvSwRelayErrors'    : 100,
+                         'SymbolErrors'        : 10,
+                         'VL15Dropped'         : 100,
+                         'XmtConstraintErrors' : 100,
+                         'XmtDiscards'         : 100
+                        }
+
+
+# functions
+def error(message, errcode = -1):
+  """
+  Print the error message and exit with an error code.
+  """
+  print >> sys.stderr, 'Error: %s' % (message)
+  sys.exit(errcode)
+
+
+def warning(message):
+  """
+  Print the warning message.
+  """
+  print >> sys.stderr, 'Warning: %s' % (message)
+
+
+def info(message):
+  """
+  Print the info message.
+  """
+  print >> sys.stderr, 'Info: %s' % (message)
+
+
+def cpu_number():
+  """
+  Obtain the number of cores/cpus that is available.
+  """
+  try:
+    cpu = int(os.sysconf('SC_NPROCESSORS_ONLN'))
+    if cpu > 0:
+      return cpu
+    else:
+      return 0
+  except (AttributeError, ValueError):
+    return 0
+
+
+def run_cmd(cmd):
+  """
+  Run command in subprocess, capture outputs and return.
+  """
+  retvalue = {}
+  try:
+    p = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE, \
+                         stderr = subprocess.STDOUT)
+  except OSError, exc:
+    exc.args = ['Can not run \"%s\"']
+    raise
+  retvalue['retstr'] = p.stdout.read()
+  retvalue['retval'] = p.wait()
+  return retvalue
+
+
+def assert_file(file):
+  """
+  Assert if file does not exist.
+  """
+  if not os.path.isfile(file):
+    raise RuntimeError, 'Can not find file \"%s\"' % file
+
+
+def read_file(file):
+  """
+  Read lines from file.
+  """
+  lines = ''
+  assert_file(file)
+  try:
+    out = open(file)
+    lines = out.read()
+    out.close()
+  except:
+    raise RuntimeError, 'Failed to read from \"%s\"' % file
+  return lines
+
+
+def uniq_list(seq):
+  """
+  Obtain the unique elements from a list.
+  """
+  keys = {}
+  for each in seq:
+    keys[each] = 1
+  return keys.keys()
+
+
+def parse_config(config_file, clusters, verbose=False):
+  """
+  Parse fabric config file, obtain guid <-> desc (hostname) mapping.
+  """
+  if verbose:
+    info('Reading config file %s ...' % config_file)
+
+  try:
+    assert_file(config_file)
+  except RuntimeError:
+    error('Failed to read from %s' % config_file)
+
+  guid_desc_mapping = {}
+
+  config = ConfigParser.SafeConfigParser()
+  config.read(config_file)
+  config_clusters = config.sections()
+
+  # sanity check
+  if clusters and not set(clusters).issubset(set(config_clusters)):
+    error('Not all clusters in %s are defined in %s' % (clusters, config_file))
+
+  # if no clusters are defined
+  if not clusters:
+    clusters = config_clusters
+
+  for cluster in clusters:
+    for guid, desc in config.items(cluster):
+      guid_desc_mapping[int(guid, 0)] = desc
+
+  return guid_desc_mapping
+
+
+def parse_topology(topo_string, guid_desc_mapping, dryrun=False, verbose=False):
+  """
+  Parse the topology file which has the ibnetdiscover format, return ibnodes,
+  indices of ibnodes, and link pairs.
+  """
+  if verbose:
+    info('Processing topology ...')
+
+  ibnodes = {}
+  ibnodes_index = {}
+  links = []
+
+  # separate it into blocks
+  block_pattern = re.compile(r'(.*?)\n\n', re.DOTALL)
+  blocks = [m.groups() for m in block_pattern.finditer(topo_string)]
+
+  # parse all blocks to retrieve ibnodes
+  for block in blocks:
+    ibnode = parse_ibnode(block[0], guid_desc_mapping, dryrun, verbose=False)
+    if ibnode:
+      ibnodes[ibnode['nodeguid']] = ibnode
+
+      # put it into ibnodes_index{} as well
+      for collect in ['desc', 'nodedesc', 'nodeguid', 'nodelid', 'type']:
+        if collect not in ibnodes_index:
+          ibnodes_index[collect] = {}
+        if ibnode[collect] not in ibnodes_index[collect]:
+          ibnodes_index[collect][ibnode[collect]] = []
+        if ibnode['nodeguid'] not in ibnodes_index[collect][ibnode[collect]]:
+          ibnodes_index[collect][ibnode[collect]].append(ibnode['nodeguid'])
+      for collect in ['portguid', 'portlid', 'speed', 'width']:
+        if collect not in ibnodes_index:
+          ibnodes_index[collect] = {}
+        for ibport in ibnode['nodeports']:
+          if ibport[collect] not in ibnodes_index[collect]:
+            ibnodes_index[collect][ibport[collect]] = []
+          if ibnode['nodeguid'] not in ibnodes_index[collect][ibport[collect]]:
+            ibnodes_index[collect][ibport[collect]].append(ibnode['nodeguid'])
+
+  # sort each sub-category in ibnodes_index['type']
+  if ibnodes_index:
+    for type in ibnodes_index['type'].keys():
+      if type in ['Spine', 'Leaf', 'Line']:
+        try:
+          ibnodes_index['type'][type].sort( \
+            key = lambda guid: int(ibnodes[guid]['typeindex']))
+        except ValueError:
+          ibnodes_index['type'][type].sort( \
+            key = lambda guid: ibnodes[guid]['typeindex'])
+      else:
+        ibnodes_index['type'][type].sort( \
+          key = lambda guid: ibnodes[guid]['desc'])
+
+  # parse all ibnodes to construct link graph
+  for ibnode in ibnodes.values():
+    for ibport in ibnode['nodeports']:
+      guid = ibnode['nodeguid']
+      port = ibport['port']
+      toguid = ibport['tonodeguid']
+      toport = ibport['tonodeport']
+      if toguid and ((toguid, toport), (guid, port)) not in links:
+        links.append(((guid, port), (toguid, toport)))
+
+  return ibnodes, ibnodes_index, links
+
+
+def parse_ibnode(block, guid_desc_mapping, dryrun=False, verbose=False):
+  """
+  Parse an ibnode, categarize if it is a spine, leaf, or ca.
+  """
+  ibnode = {}
+  if not block:
+    warning('Empty block')
+    return ibnode
+
+  # match the header part of each block (multiline)
+  node_pattern = re.compile(r'^vendid=(?P<vendid>.*)\ndevid=(?P<devid>.*)\nsysimgguid=(?P<sysimgguid>.*)\n(switchguid=(?P<switchguid>.*)\(.*\))?(caguid=(?P<caguid>.*))?\n(?P<nodetype>Switch|Ca)\s+(?P<portcount>\d+)\s+\"(?P<nodeguid>.*)\"\s+\#\s+\"(?P<nodedesc>.*)\"(.*\s+port\s+(?P<nodeport>\d+)\s+lid\s+(?P<nodelid>\d+)\s+lmc\s+(?P<nodelmc>\d+))?\n(?P<nodeports>.*)', re.DOTALL)
+
+  # match the real type of a switch (Spine|Line|Leaf)
+  # Mellanox
+  type_pattern_m = re.compile(r'^(?P<model>MF0.*)\s*\/(?P<type>(S|L))(?P<typeindex>\d+)\/.*$')
+  # QLogic
+  type_pattern_q = re.compile(r'^(?P<model>QLogic.*)\s*(?P<type>(S|L))(?P<typeindex>\d+\w*)$')
+  # Voltaire
+  type_pattern_v = re.compile(r'^(?P<model>Voltaire.*)\s*(?P<type>(((Spine|Leaf|Line)\s+)))(?P<typeindex>\d+)\s*.*$')
+
+  type_pattern = [type_pattern_m, type_pattern_q, type_pattern_v]
+
+  node_match = node_pattern.match(block)
+  if node_match:
+    for key in node_pattern.groupindex.keys():
+      ibnode[key] = node_match.group(key)
+    ibnode['nodedesc'] = ibnode['nodedesc'].strip()
+
+    # generalize nodeguid
+    if ibnode['nodetype'] in ['Switch']:
+      ibnode['nodeguid'] = ibnode['switchguid']
+      # check if this ibnode is online or not
+      if not dryrun:
+        if WITH_ROOT:
+          cmd = 'ibaddr -G %s'
+        else:
+          cmd = 'sudo ibaddr -G %s'
+
+        result = run_cmd(cmd % ibnode['nodeguid'])
+        if result['retval']:
+          warning('%s found on the fabric but not alive' % ibnode['nodeguid'])
+          return None
+    elif ibnode['nodetype'] in ['Ca']:
+      ibnode['nodeguid'] = ibnode['caguid']
+    else:
+      warning('Unknown IB node type %s' % ibnode['nodetype'])
+
+    # generalize model, type, and typeindex
+    if ibnode['nodetype'] in ['Ca']:
+      ibnode['model'] = None
+      ibnode['type'] = ibnode['nodetype']
+      ibnode['typeindex'] = None
+    elif ibnode['nodetype'] in ['Switch']:
+      for p in type_pattern:
+        type_match = p.match(ibnode['nodedesc'])
+        if type_match:
+          break
+
+      if type_match:
+        ibnode['model'] = type_match.group('model').strip()
+        ibnode['type'] = type_match.group('type').strip()
+        ibnode['typeindex'] = type_match.group('typeindex').strip()
+        if ibnode['type'] in ['Spine', 'S']:
+          ibnode['type'] = 'Spine'
+        elif ibnode['type'] in ['Leaf', 'Line', 'L']:
+          ibnode['type'] = 'Leaf'
+
+      else:
+        ibnode['model'] = ibnode['nodedesc']
+        ibnode['type'] = ibnode['nodetype']
+        ibnode['typeindex'] = None
+
+    else:
+      ibnode['model'] = None
+      ibnode['type'] = 'Unknown'
+      ibnode['typeindex'] = None
+
+    # digitize fields
+    for key in ['vendid', 'devid', 'sysimgguid', 'switchguid', 'caguid', \
+                'nodeguid', 'nodelid', 'nodelmc', 'portcount', 'nodeport']:
+      if ibnode[key]:
+        ibnode[key] = int(ibnode[key], 0)
+
+    # if guid_desc_mapping is defined, use it to define ibnode['desc'], \
+    # otherwise use the original ibnode['nodedesc']
+    if (ibnode['nodeguid'] in guid_desc_mapping):
+      ibnode['desc'] = guid_desc_mapping[ibnode['nodeguid']]
+    else:
+      ibnode['desc'] = ibnode['nodedesc']
+
+    # parse nodeports, complete empty ports
+    ibnode['nodeports'] = parse_ports(ibnode, guid_desc_mapping, verbose)
+  else:
+    if verbose:
+      warning('Cannot parse the following section:\n%s' % block)
+
+  return ibnode
+
+
+def parse_ports(ibnode, guid_desc_mapping, verbose=False):
+  """
+  Parse ports, duplicate ports into ibnodes if ports are available and have
+  different GUIDs than nodeguid.
+  """
+  ibports = []
+  if not ibnode['nodeports']:
+    warning('Empty block')
+    return ibports
+
+  # RE for ibport
+  port_pattern = re.compile(r'\[(?P<port>\d+)\](\((?P<portguid>.*)\))?\s+\"(?P<tonodeguid>.*)\"\[(?P<tonodeport>\d+)\](\((?P<toportguid>.*)\))?\s+\#\s+(lid\s+(?P<portlid>\d+)\s+lmc\s+(?P<portlmc>\d+)\s+)?\"(?P<tonodedesc>.*)\"\s+lid\s+(?P<toportlid>\d+)\s+(?P<width>\d+)x(?P<speed>(SDR|DDR|QDR|FDR))$')
+
+  ports = ibnode['nodeports'].split('\n')
+  for port in ports:
+    ibport = {}
+    port_match = port_pattern.match(port)
+    if port_match:
+      for key in port_pattern.groupindex.keys():
+        ibport[key] = port_match.group(key)
+      ibport['tonodedesc'] = ibport['tonodedesc'].strip()
+
+      # generalize data
+      if ibport['portguid']:
+        ibport['portguid'] = '0x' + ibport['portguid']
+      if ibport['tonodeguid']:
+        ibport['tonodeguid'] = '0x' + ibport['tonodeguid'][2:]
+      if ibport['toportguid']:
+        ibport['toportguid'] = '0x' + ibport['toportguid']
+      if ibport['tonodeguid'] and not ibport['toportguid']:
+        ibport['toportguid'] = ibport['tonodeguid']
+      for key in ['guid', 'lid', 'lmc']:
+        if not ibport['port%s' % key]:
+          ibport['port%s' % key] = ibnode['node%s' % key]
+      for key in ['port', 'portguid', 'tonodeguid', 'tonodeport', \
+                  'toportguid', 'portlid', 'portlmc', 'toportlid', 'width']:
+        if key and (type(ibport[key]) is type('')):
+          ibport[key] = int(ibport[key], 0)
+
+      # ibport['todesc'] is the redefined tonodedesc
+      if ibport['tonodeguid'] in guid_desc_mapping:
+        ibport['todesc'] = guid_desc_mapping[ibport['tonodeguid']]
+      else:
+        ibport['todesc'] = ibport['tonodedesc']
+
+      ibports.append(ibport)
+    else:
+      if verbose:
+        warning('Cannot parse the following section:\n%s' % port)
+
+  # complete ports that do not have a link
+  for port in range(1, ibnode['portcount']+1):
+    if port not in [ibport['port'] for ibport in ibports]:
+      ibport = {}
+      for key in port_pattern.groupindex.keys():
+        if key in ['port']:
+          ibport[key] = port
+        elif key in ['portguid']:
+          if ibnode['nodetype'] in ['Ca']:
+            ibport[key] = ibnode['nodeguid'] + port
+          else:
+            ibport[key] = ibnode['nodeguid']
+        elif key in ['portlid']:
+          if ibnode['nodetype'] in ['Switch']:
+            ibport[key] = ibnode['nodelid']
+          else:
+            ibport[key] = None
+        elif key in ['portlmc']:
+          if ibnode['nodetype'] in ['Switch']:
+            ibport[key] = ibnode['nodelmc']
+          else:
+            ibport[key] = None
+        else:
+          ibport[key] = None
+      ibports.append(ibport)
+
+  # sort all ports based on their port number
+  if ibports:
+    ibports.sort(key = lambda ibport: ibport['port'])
+
+  return ibports
+
+
+def query_ibnode(ibnodes_index, dest_list, cat_list, re_string, verbose=False):
+  """
+  Query ibnodes_index to search for all that matches dest_list, based on
+  categories provided in cat_list, and the regex defined in re_string.
+  """
+  if verbose:
+    info('Querying %s ...' % dest_list)
+
+  tgt_guid = []
+  for dest in dest_list:
+    for cat in cat_list:
+      for key in [x for x in ibnodes_index[cat].keys() if x is not None]:
+        if ((cat in ['desc', 'nodedesc', 'speed', 'type']) and \
+             (re.search(re_string % dest, key, re.I))) or \
+           ((cat in ['nodeguid', 'nodelid', 'portguid', 'portlid', 'width']) \
+             and (dest == key)):
+          for guid in ibnodes_index[cat][key]:
+            tgt_guid.append(guid)
+  return tgt_guid
+
+
+def display_ibnode(ibnode, detail, verbose=False):
+  """
+  Format and display an ibnode structure.
+  """
+  line = ''
+  if detail >= 3:
+    line += '  vendid=0x%x\n  devid=0x%x\n  sysimgguid=0x%016x\n  nodeguid=0x%016x\n' % \
+            (ibnode['vendid'], ibnode['devid'], ibnode['sysimgguid'], \
+             ibnode['nodeguid'])
+  if detail >= 1:
+    if ibnode['nodetype'] in ['Switch']:
+      line += '  %-6s %2d ports "0x%016x" # "%s" port %s lid %s lmc %s\n' % \
+              (ibnode['type'], ibnode['portcount'], ibnode['nodeguid'], \
+               ibnode['desc'], ibnode['nodeport'], ibnode['nodelid'], \
+               ibnode['nodelmc'])
+    elif ibnode['type'] in ['Ca']:
+      line += '  %-6s %2d ports "0x%016x" # "%s"\n' % \
+              (ibnode['type'], ibnode['portcount'], ibnode['nodeguid'], \
+               ibnode['desc'])
+  if detail >= 2:
+    for port in ibnode['nodeports']:
+      if port['tonodeguid']:
+        line += '    [%2d](0x%016x)(lid %4d) <-> [%2d](0x%016x)(lid %4d) lmc %1d %dx%s # "%s"\n' % \
+                (port['port'], port['portguid'], port['portlid'], \
+                 port['tonodeport'], port['tonodeguid'], port['toportlid'], \
+                 port['portlmc'], port['width'], port['speed'], port['todesc'])
+      else:
+        if detail >= 3:
+          line += '    [%2s] <-> None\n' % (port['port'])
+
+  return line
+
+
+def count_components(ibnodes_index, verbose=False):
+  """
+  Count components of the given topology.
+  """
+  line = ''
+
+  for type in ibnode_type:
+    try:
+      count = len(ibnodes_index['type'][type])
+    except KeyError:
+      count = 0
+
+    if count:
+      line += '%d %s ' % (count, type)
+
+  if not line:
+    line = '0 '
+
+  return line
+
+
+def compare_components(ibnodes, ibnodes_index1, ibnodes_index2, detail, defined_first=True, verbose=False):
+  """
+  Compare components from two topologies and identify the difference. If 
+  'defined_first' is True, this is a file to fabric comparison, otherwise it is
+  a fabric to file comparison.
+  """
+  line = ''
+
+  if 'type' in ibnodes_index1:
+    for type in ibnodes_index1['type'].keys():
+      try:
+        delta = set(ibnodes_index1['type'][type]) - \
+                set(ibnodes_index2['type'][type])
+      except KeyError:
+        delta = ibnodes_index1['type'][type]
+
+      if delta:
+        if defined_first:
+          line += '%d %s found in the topology file but not on the fabric:\n' \
+                  % (len(delta), type)
+        else:
+          line += '%d %s found on the fabric but not in the topology file:\n' \
+                  % (len(delta), type)
+
+        if type in ['Spine', 'Leaf', 'Line']:
+          try:
+            delta = sorted(list(delta), \
+                      key = lambda guid: int(ibnodes[guid]['typeindex']))
+          except ValueError:
+            delta = sorted(list(delta), \
+                      key = lambda guid: ibnodes[guid]['typeindex'])
+        else:
+          delta = sorted(list(delta), key = lambda guid: ibnodes[guid]['desc'])
+
+        for guid in delta:
+          # only output the 1st level of detail
+          line += display_ibnode(ibnodes[guid], 1, verbose)
+
+        line += '\n'
+
+  return line
+
+
+def compare_links(ibnodes, links1, links2, defined_first=True, verbose=False):
+  """
+  Compare the link graph of two topologies and identify the difference. If 
+  'defined_first' is True, this is a file to fabric comparison, otherwise it is
+  a fabric to file comparison.
+  """
+  line = ''
+  delta = []
+
+  for link in set(links1) - set(links2):
+    if (link[1], link[0]) not in links2:
+      delta.append(link)
+
+  if delta:
+    if defined_first:
+      line += '%d link found in the topology file but not on the fabric:\n' \
+              % (len(delta))
+    else:
+      line += '%d link found on the fabric but not in the topology file:\n' \
+              % (len(delta))
+
+    for link in delta:
+      try:
+        desc0 = ibnodes[link[0][0]]['desc']
+      except:
+        desc0 = '0x%x' % link[0][0]
+      try:
+        desc1 = ibnodes[link[1][0]]['desc']
+      except:
+        desc1 = '0x%x' % link[1][0]
+
+      line += '  %s [%s] <-> %s [%s]\n' % (desc0, link[0][1], desc1, link[1][1])
+
+    return line
+
+
+def plot_topology(ibnodes, tgt_guid, links, graph_file, verbose=False):
+  """
+  Plot topology with Graphviz, requires pydot.
+  """
+  if verbose:
+    info("Plotting topology %s ..." % graph_file)
+
+  graph = pydot.Dot(graph_type='graph', rankdir='LR')
+
+  for guid in tgt_guid:
+    if ibnodes[guid]['type'] in ['Switch', 'Spine', 'Leaf', 'Line']:
+      graph.add_node(pydot.Node(ibnodes[guid]['desc'], shape='box', \
+                     style='filled', color='green'))
+
+  for link in links:
+    if link[0][0] in tgt_guid and link[1][0] in tgt_guid:
+      graph.add_edge(pydot.Edge(ibnodes[link[0][0]]['desc'], \
+                     ibnodes[link[1][0]]['desc']))
+
+  graph.write(graph_file, prog='dot', format='png')
+
+
+def ibtracert(ibnode1, ibnode2, verbose=False):
+  """
+  Display routing info between two Node GUIDs.
+  """
+  text_line = ''
+  # run ibtracert to retrieve routing info
+  if WITH_ROOT:
+    cmd = 'ibtracert -G %s %s'
+  else:
+    cmd = 'sudo ibtracert -G %s %s'
+
+  if ibnode1['type'] in ['Ca']:
+    guids1 = [ibport['portguid'] for ibport in ibnode1['nodeports']]
+  else:
+    guids1 = [ibnode1['nodeguid']]
+  if ibnode2['type'] in ['Ca']:
+    guids2 = [ibport['portguid'] for ibport in ibnode2['nodeports']]
+  else:
+    guids2 = [ibnode2['nodeguid']]
+
+  for guid1 in guids1:
+    for guid2 in guids2:
+      result = run_cmd(cmd % (guid1, guid2))
+      if not result['retval']:
+        for line in result['retstr'].split('\n'):
+          text_line += '  %s\n' % line
+      else:
+        text_line += '  No route from %s to %s\n' % (ibnode1['nodedesc'], \
+                     ibnode2['nodedesc'])
+  print text_line[:-1]
+
+
+def sminfo(ibnode, verbose=False):
+  """
+  Run sminfo externally to collect SM info.
+  """
+  text_line = ''
+  ret_lines = ''
+  sminfo = []
+
+  if WITH_ROOT:
+    cmd = 'sminfo -G %s'
+  else:
+    cmd = 'sudo sminfo -G %s'
+
+  if ibnode['nodetype'] in ['Ca']:
+    for ibport in ibnode['nodeports']:
+      if ibport['tonodeguid']:
+        result = run_cmd(cmd % ibport['portguid'])
+        if not result['retval']:
+          ret_lines += result['retstr']
+          sminfo.append(parse_sminfo(result['retstr'], ibnode['desc'], verbose))
+  elif ibnode['nodetype'] in ['Switch']:
+    result = run_cmd(cmd % ibnode['nodeguid'])
+    if not result['retval']:
+      ret_lines += result['retstr']
+      sminfo.append(parse_sminfo(result['retstr'], ibnode['desc'], verbose))
+
+  if verbose:
+    for line in ret_lines.split('\n'):
+      text_line += '  %s\n' % line
+    print text_line[:-1]
+
+  return sminfo
+
+
+def sminfo_threading(input_queue, output_queue):
+  """
+  Collecting SM info in parallel.
+  """
+  for ibnode, verbose in iter(input_queue.get, 'STOP'):
+    output_queue.put(sminfo(ibnode, verbose))
+
+
+def parse_sminfo(lines, desc, verbose=False):
+  """
+  Parse sminfo for formatting.
+  """
+  sminfo = {}
+  pattern = re.compile(r'^sminfo:\ssm\slid\s(?P<lid>\d+)\ssm\sguid\s(?P<guid>\S+),\sactivity\scount\s(?P<activity>\d+)\spriority\s(?P<priority>\d+)\sstate\s(?P<state>\d+)\s(?P<tag>\S+)$')
+
+  for line in lines.split('\n'):
+    match = pattern.match(line)
+    if match:
+      for key in ['lid', 'guid', 'activity', 'priority', 'state']:
+        sminfo[key] = int(match.group(key), 0)
+      sminfo['tag'] = match.group('tag')
+      sminfo['desc'] = desc
+  return sminfo
+
+
+def perfquery(ibnode, reset, detail, verbose=False):
+  """
+  Run perfquery externally to collect performance counters.
+  """
+  text_line = ''
+  ret_lines = ''
+  perf_counters = []
+
+  if ibnode['nodetype'] in ['Ca']:
+    for ibport in ibnode['nodeports']:
+
+      if ibport['tonodeguid']:
+        if detail >= 2:
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+            verbose)
+          if not result['retval']:
+            ret_lines += result['retstr']
+            perf_counters.append(parse_perfquery(result['retstr'], \
+              ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
+      else:
+        if detail >= 3:
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+            verbose)
+          if not result['retval']:
+            ret_lines += result['retstr']
+            perf_counters.append(parse_perfquery(result['retstr'], \
+              ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
+
+  elif ibnode['nodetype'] in ['Switch']:
+    if detail <= 1:
+      result = perfquery_port(ibnode['nodeguid'], '255', reset, verbose)
+      if not result['retval']:
+        ret_lines += result['retstr']
+        perf_counters.append(parse_perfquery(result['retstr'], \
+          ibnode['nodeguid'], ibnode['nodelid'], ibnode['desc'], verbose))
+
+    for ibport in ibnode['nodeports']:
+      if ibport['tonodeguid']:
+        if detail >= 2:
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+            verbose)
+          if not result['retval']:
+            ret_lines += result['retstr']
+            perf_counters.append(parse_perfquery(result['retstr'], \
+              ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
+      else:
+        if detail >= 3:
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+            verbose)
+          if not result['retval']:
+            ret_lines += result['retstr']
+            perf_counters.append(parse_perfquery(result['retstr'], \
+              ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
+
+  if verbose:
+    for line in ret_lines.split('\n'):
+      text_line += '  %s\n' % line
+    print text_line[:-1]
+
+  return perf_counters
+
+
+def perfquery_port(guid, port, reset, verbose=False):
+  """
+  Run perfquery command for a single port.
+  """
+  if not reset:
+    if WITH_ROOT:
+      cmd = 'perfquery -G %s %s'
+    else:
+      cmd = 'sudo perfquery -G %s %s'
+  else:
+    if WITH_ROOT:
+      cmd = 'perfquery -r -G %s %s'
+    else:
+      cmd = 'sudo perfquery -r -G %s %s'
+
+  while True:
+    result = run_cmd(cmd % (guid, port))
+    # if no error return output
+    if not result['retval']:
+      break
+    else:
+      if verbose:
+        warning(result['retstr'])
+      # if the error is due to connection failure, keep trying,
+      # otherwise return error msg
+      if not re.search('connect failed', result['retstr']):
+        break
+  return result
+
+
+def perfquery_threading(input_queue, output_queue):
+  """
+  Run perfquery in parallel.
+  """
+  for (ibnode, reset, detail, verbose) in iter(input_queue.get, 'STOP'):
+    output_queue.put(perfquery(ibnode, reset, detail, verbose))
+
+
+def parse_perfquery(lines, guid, lid, nodedesc, verbose=False):
+  """
+  Parse performance counters for fomatting.
+  """
+  perf_counters = {}
+  pattern = re.compile(r'^(?P<key>\S+)\:(\.)*(?P<value>(0x)?\S+)$')
+  for line in lines.split('\n'):
+    match = pattern.match(line)
+    if match:
+      key = match.group('key')
+      value = int(match.group('value'), 0)
+      if key in ibperf_counters:
+        perf_counters[key] = value
+      elif key in ibperf_hash:
+        perf_counters[ibperf_hash[key]] = value
+      else:
+        perf_counters[key] = value
+
+      perf_counters['Guid'] = guid
+      perf_counters['Lid'] = lid
+      perf_counters['NodeDesc'] = nodedesc
+  return perf_counters
+
+
+def display_perfquery_help(screen, verbose=False):
+  """
+  Display the mini help page in the monitoring interface.
+  """
+  (screen_y, screen_x) = screen.getmaxyx()
+  subwin_y = len(ibperf_counters) + 7
+  subwin_x = max(len(line) for line in \
+    [' : toggle %s' % key for key in ibperf_counters]) + 5
+
+  if screen_y >= subwin_y and screen_x >= subwin_x:
+    subwin = screen.subwin(subwin_y, subwin_x, (screen_y-subwin_y)/2, \
+      (screen_x-subwin_x)/2)
+    subwin.clear()
+    subwin.border()
+    subwin.addstr(2, 2, 'h: help n: next     ,: left')
+    subwin.addstr(3, 2, 'q: quit p: previous .: right')
+    subwin.addstr(4, 2, ' : toggle ibnodes   r: reset')
+    for i in range(len(ibperf_counters)):
+      subwin.addstr(5+i, 2, '%x: toggle %s' % (i, ibperf_counters[i]))
+  else:
+    subwin = screen.subwin(1, screen_x, 0, 0)
+    subwin.clear()
+    subwin.addstr(0, 0, \
+      'Please increase screen size to display the help window', \
+      curses.color_pair(2))
+  subwin.refresh()
+  subwin.getch()
+
+
+def display_perfquery(screen, perf_counters, ibperf_counter, firstfield, \
+                      offset_x, offset_y, page, batch=False, verbose=False):
+  """
+  Format and display perfquery results.
+  """
+  text_line = ''
+
+  # retrieve screen sizes
+  if not batch:
+    (screen_y, screen_x) = screen.getmaxyx()
+  else:
+    (screen_y, screen_x) = (1000000, 1000000)
+
+  # sort results
+  perf_counters.sort(key = lambda perf: (perf['NodeDesc'], perf['PortSelect']))
+
+  # define output fields
+  ibperf_counter = ['NodeDesc', 'PortSelect', 'Guid'] + \
+    ibperf_counter[firstfield:]
+
+  # calculate field lengths
+  field_len = {}
+  for key in ibperf_counter:
+    if key in ['Guid']:
+      items = [('0x%016x' % perf[key]) for perf in perf_counters]
+    else:
+      items = [('%s' % perf[key]) for perf in perf_counters]
+    field_len[key] = max(len(item) for item in items)
+    # replace 'PortSelect' with 'Port'
+    if key in ['PortSelect']:
+      field_len[key] = max(field_len[key], len('Port'))
+    else:
+      field_len[key] = max(field_len[key], len(key))
+
+  # redefine perf_counters only to current screen
+  if not batch:
+    perf_counters = perf_counters[page * (screen_y - offset_y - 1) : \
+      (page + 1) * (screen_y - offset_y - 1)]
+
+  count = 0
+  for perf_counter in perf_counters:
+    for key in ibperf_counter:
+      start_x = offset_x
+      start_y = offset_y + count + 1
+      for i in range(ibperf_counter.index(key)):
+        start_x += field_len[ibperf_counter[i]] + 1
+
+      if key in ['Guid']:
+        text_line += ' 0x%016x' % (perf_counter[key])
+        if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
+          not batch:
+          screen.addstr(start_y, start_x, '0x%016x' % (perf_counter[key]))
+      elif key in ibperf_errs and perf_counter[key] >= \
+        ibperf_errs_threshold[key]:
+        text_line += ' %*s' % (field_len[key], perf_counter[key])
+        if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
+          not batch:
+          screen.addstr(start_y, start_x, '%*s' % (field_len[key], \
+            perf_counter[key]), curses.color_pair(1))
+      elif key in ibperf_errs and perf_counter[key] > 0:
+        text_line += ' %*s' % (field_len[key], perf_counter[key])
+        if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
+          not batch:
+          screen.addstr(start_y, start_x, '%*s' % (field_len[key], \
+            perf_counter[key]), curses.color_pair(2))
+      else:
+        text_line += ' %*s' % (field_len[key], perf_counter[key])
+        if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
+          not batch:
+          screen.addstr(start_y, start_x, '%*s' % (field_len[key], \
+            perf_counter[key]))
+    count += 1
+    text_line += '\n'
+
+  if count > 0:
+    header = ''
+    for key in ibperf_counter:
+      start_x = offset_x
+      start_y = offset_y
+      for i in range(ibperf_counter.index(key)):
+        start_x += field_len[ibperf_counter[i]] + 1
+
+      if key in ['PortSelect']:
+        header += ' %*s' % (field_len[key], 'Port')
+        if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
+          not batch:
+          screen.addstr(start_y, start_x, '%*s' % (field_len[key], 'Port'))
+      else:
+        header += ' %*s' % (field_len[key], key)
+        if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
+          not batch:
+          screen.addstr(start_y, start_x, '%*s' % (field_len[key], key))
+    header += '\n'
+    text_line = header + text_line
+  return text_line
+
+
+def filter_perfquery(perf_counters, showall=False, verbose=False):
+  """
+  If showall is False, returns only perf_counters that are beyond thresholds;
+  otherwise returns everything.
+  """
+  filtered = []
+  if showall:
+    filtered = perf_counters
+  else:
+    for perf_counter in perf_counters:
+      beyond_threshold = False
+      for key in ibperf_errs:
+        beyond_threshold = beyond_threshold or (perf_counter[key] >= \
+          ibperf_errs_threshold[key])
+      if beyond_threshold:
+        filtered.append(perf_counter)
+  return filtered
+
+
+def screen_start():
+  """
+  Initialize the curses window.
+  """
+  screen = curses.initscr()
+  screen.keypad(1)
+  curses.noecho()
+  curses.cbreak()
+  curses.curs_set(0)
+
+  # initialize colors
+  curses.start_color()
+  curses.use_default_colors()
+  curses.init_pair(1, curses.COLOR_RED, -1)
+  curses.init_pair(2, curses.COLOR_YELLOW, -1)
+
+  return screen
+
+
+def screen_end():
+  """
+  Restore the curses window.
+  """
+  curses.nocbreak()
+  curses.echo()
+  curses.endwin()
+
+
+def help(myname):
+  """
+  Help page.
+  """
+  print 'Usage: %s [options]' % myname
+  print '  -a, --showall             show all ibnodes when checking errors'
+  print '  -A, --and                 use "and" operator instead of "or" (default) on target selection'
+  print '  -b, --batch               batch mode'
+  print '  -c, --config <CONFIG>     fabric config file (same as -f)'
+  print '  -C, --cluster <CLUSTER>   cluster(s) to be queried (comma separated)'
+  print '  -d, --detail              detail level (-d, -dd, -ddd)'
+  print '  -D, --dryrun              dryrun to test topology, use with -t'
+  print '  -E, --error               check errors'
+  print '  -f, --fabric <CONFIG>     fabric config file (same as -c)'
+  print '  -g, --guid <GUID>         query one or more GUIDs (comma separated)'
+  print '  -G, --graph <GRAPH>       plot topology with graphviz and output to <GRAPH>'
+  print '  -h, --help                this help page'
+  print '  -i, --interval            scan interval to check errors (seconds)'
+  print '  -l, --lid <LID>           query one or more LIDs (comma separated)'
+  print '  -L, --leaf <LEAF>         query one or more LEAFs (comma separated)'
+  print '      --line <LINE>         query one or more LINE CARDs (comma separated)'
+  print '  -M, --sminfo              check subnet managers'
+  print '  -n, --iteration           number of iterations'
+  print '  -N, --nodedesc <NODEDESC> query one or more NODEDESCs (comma separated)'
+  print '  -O, --timeout <TIMEOUT>   timeout value for scanning fabric (seconds, default is 3 seconds)'
+  print '  -p, --parallel <THREADS>  number of threads for parallel processing'
+  print '  -P, --port <PORT>         query one or more ports (comma separated)'
+  print '  -r, --reset               reset error counters once'
+  print '  -R, --route               query routing info'
+  print '  -s, --speed <SPEED>       query one or more SPEEDs [SDR|DDR|QDR|FDR] (comma separated)'
+  print '  -S, --spine <SPINE>       query one or more SPINEs (comma separated)'
+  print '  -t, --topo <TOPOFILE>     topology file'
+  print '  -T, --type <TYPE>         query one or more TYPEs %s (comma separated)' % ibnode_type
+  print '  -v, --verbose             verbose output'
+  print '  -w, --width <WIDTH>       query one or more WIDTHes [1|2|4] (comma separated)'
+
+
+def main(myname, argv):
+  """
+  The main function.
+  """
+
+  count     = 0
+  detail    = 0
+  timeout   = 3
+  interval  = 60
+  iteration = 0
+  threads   = cpu_number()
+  topo_file   = ''
+  config_file = ''
+  graph_file  = ''
+  batch       = False
+  check_error = False
+  check_reset = False
+  check_route = False
+  check_sm    = False
+  dryrun      = False
+  op_and      = False
+  showall     = False
+  verbose     = False
+  dest_cluster  = []
+  dest_spine    = []
+  dest_leaf     = []
+  dest_guid     = []
+  dest_lid      = []
+  dest_nodedesc = []
+  dest_port     = []
+  dest_speed    = []
+  dest_type     = []
+  dest_width    = []
+  tgt_guid      = []
+  links         = []
+  defined_links = []
+  ibnodes               = {}
+  ibnodes_index         = {}
+  guid_desc_mapping     = {}
+  defined_ibnodes       = {}
+  defined_ibnodes_index = {}
+
+  try:
+    opts, args = getopt.getopt(argv, 'aAbc:C:dDEf:g:G:hi:l:L:Mn:N:O:p:P:rRs:S:t:T:vw:', \
+                 ['showall', 'and', 'batch', 'config=', 'cluster=', 'detail', \
+                  'dryrun', 'error', 'fabric=', 'guid=', 'graph=', 'help', \
+                  'interval=', 'lid=', 'leaf=', 'line=', 'sminfo', \
+                  'iteration=', 'nodedesc=', 'timeout=', 'parallel=', 'port=', \
+                  'reset', 'route', 'speed=', 'spine=', 'topo=', 'type=', \
+                  'verbose', 'width='])
+  except getopt.GetoptError:
+    warning('Invalid arguments: %s\n' % argv)
+    help(myname)
+    sys.exit(2)
+
+  for opt, val in opts:
+    if opt in ['-h', '--help']:
+      help(myname)
+      sys.exit(0)
+    elif opt in ['-a', '--showall']:
+      showall = True
+    elif opt in ['-A', '--and']:
+      op_and = True
+    elif opt in ['-b', '--batch']:
+      batch = True
+    elif opt in ['-c', '--config', '-f', '--fabric']:
+      config_file = val
+    elif opt in ['-C', '--cluster']:
+      dest_cluster = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-d', '--detail']:
+      detail += 1
+    elif opt in ['-D', '--dryrun']:
+      dryrun = True
+    elif opt in ['-E', '--error']:
+      check_error = True
+    elif opt in ['-g', '--guid']:
+      dest_guid = sorted(int(x, 16) for x in val.split(','))
+    elif opt in ['-G', '--graph']:
+      if WITH_PYDOT:
+        graph_file = val
+      else:
+        warning('\'pydot\' is not imported, ignore \'%s %s\'' % (opt, val))
+    elif opt in ['-i', '--interval']:
+      try:
+        interval = int(val)
+      except ValueError:
+        warning('%s is not a valid interval value' % val)
+    elif opt in ['-l', '--lid']:
+      dest_lid = sorted(int(x) for x in val.split(','))
+    elif opt in ['-L', '--leaf', '--line']:
+      dest_leaf = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-M', '--sminfo']:
+      check_sm = True
+    elif opt in ['-n', '--iteration']:
+      try:
+        iteration = int(val)
+      except ValueError:
+        warning('%s is not a valid iteration number' % val)
+    elif opt in ['-N', '--nodedesc']:
+      dest_nodedesc = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-O', '--timeout']:
+      try:
+        timeout = int(val)
+      except ValueError:
+        warning('%s is not a valid timeout value' % val)
+    elif opt in ['-p', '--parallel']:
+      try:
+        threads = int(val)
+      except ValueError:
+        warning('%s is not a valid thread number' % val)
+      if threads <= 0:
+        threads = 1
+    elif opt in ['-P', '--port']:
+      warning('\"-P\" is not currently implemented, ignore')
+      dest_port = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-r', '--reset']:
+      check_reset = True
+    elif opt in ['-R', '--route']:
+      check_route = True
+    elif opt in ['-s', '--speed']:
+      dest_speed = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-S', '--spine']:
+      dest_spine = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-t', '--topo']:
+      topo_file = val
+    elif opt in ['-T', '--type']:
+      dest_type = sorted(x.strip() for x in val.split(','))
+    elif opt in ['-v', '--verbose']:
+      verbose = True
+    elif opt in ['-w', '--width']:
+      try:
+        dest_width = sorted(int(x) for x in val.split(','))
+      except ValueError:
+        warning('%s is not a valid width' % val)
+
+  # read fabric config file
+  if config_file:
+    guid_desc_mapping = parse_config(config_file, dest_cluster, verbose)
+
+  # run 'ibnetdiscover' to retrieve topology
+  if not dryrun:
+    if verbose:
+      info('Running ibnetdiscover ...')
+
+    if WITH_ROOT:
+      topo_string= run_cmd('ibnetdiscover')['retstr'] + '\n'
+    else:
+      topo_string= run_cmd('sudo ibnetdiscover')['retstr'] + '\n'
+
+    ibnodes, ibnodes_index, links = parse_topology(topo_string, \
+      guid_desc_mapping, dryrun, verbose)
+
+  # read from pre-defined topology file
+  if topo_file:
+    if verbose:
+      info('Reading topology file %s ...' % topo_file)
+    try:
+      assert_file(topo_file)
+    except RuntimeError:
+      error('Failed to read from %s' % topo_file)
+    defined_topo_string= read_file(topo_file) + '\n'
+    defined_ibnodes, defined_ibnodes_index, defined_links = parse_topology( \
+      defined_topo_string, guid_desc_mapping, True, verbose)
+    if dryrun:
+      ibnodes = defined_ibnodes
+      ibnodes_index = defined_ibnodes_index
+      links = defined_links
+
+  # output total components found on the fabric
+  print count_components(ibnodes_index, verbose) + 'found on the fabric'
+
+  # output total components found, and comparison
+  if topo_file:
+    print count_components(defined_ibnodes_index, verbose) + \
+      'found in the topology file'
+
+  print
+
+  # compare topologies
+  if topo_file:
+    line = compare_components(defined_ibnodes, defined_ibnodes_index, \
+      ibnodes_index, detail, True, verbose)
+    if line: print line[:-1]
+    line = compare_components(ibnodes, ibnodes_index, defined_ibnodes_index, \
+      detail, False, verbose)
+    if line: print line[:-1]
+
+    # compare link graphs
+    line = compare_links(defined_ibnodes, defined_links, links, True, verbose)
+    if line: print line
+    line = compare_links(ibnodes, links, defined_links, False, verbose)
+    if line: print line
+
+  # query fabric
+  if ibnodes_index:
+    if dest_cluster:
+      tgt_guid.append(query_ibnode(ibnodes_index, guid_desc_mapping, \
+        ['nodeguid', 'portguid'], '^%s$', verbose))
+    if dest_guid:
+      tgt_guid.append(query_ibnode(ibnodes_index, dest_guid, \
+        ['nodeguid', 'portguid'], '^%s$', verbose))
+    if dest_lid:
+      tgt_guid.append(query_ibnode(ibnodes_index, dest_lid, \
+        ['nodelid', 'portlid'], '^%s$', verbose))
+    if dest_nodedesc:
+      tgt_guid.append(query_ibnode(ibnodes_index, dest_nodedesc, \
+        ['nodedesc', 'desc'], '%s', verbose))
+    if dest_speed:
+      tgt_guid.append(query_ibnode(ibnodes_index, dest_speed, ['speed'], \
+        '^%s$', verbose))
+    if dest_width:
+      tgt_guid.append(query_ibnode(ibnodes_index, dest_width, ['width'], \
+        '^%s$', verbose))
+    if dest_type:
+      tgt_guid.append(query_ibnode(ibnodes_index, dest_type, ['type'], '^%s$', \
+        verbose))
+    if dest_spine:
+      tgt_tmp = []
+      for i in query_ibnode(ibnodes_index, ['Spine'], ['type'], '^%s$', verbose):
+        if ibnodes[i]['typeindex'] in dest_spine:
+          tgt_tmp.append(i)
+      tgt_guid.append(tgt_tmp)
+    if dest_leaf:
+      tgt_tmp = []
+      for i in query_ibnode(ibnodes_index, ['Leaf'], ['type'], '^%s$', verbose):
+        if ibnodes[i]['typeindex'] in dest_leaf:
+          tgt_tmp.append(i)
+      tgt_guid.append(tgt_tmp)
+
+    if tgt_guid:
+      if op_and:
+        for each in tgt_guid[1:]:
+          tgt_guid[0] = set(tgt_guid[0]) & set(each)
+      else:
+        for each in tgt_guid[1:]:
+          tgt_guid[0] = set(tgt_guid[0]) | set(each)
+
+      tgt_guid = sorted(uniq_list(tgt_guid[0]), \
+        key = lambda guid: ibnodes[guid]['desc'])
+
+  # if no query, output all components found
+  if not (dest_cluster or dest_guid or dest_lid or dest_nodedesc or dest_speed \
+    or dest_width or dest_type or dest_spine or dest_leaf):
+    print 'fabric topology:'
+    for type in ibnode_type:
+      try:
+        tgt_guid.extend(ibnodes_index['type'][type])
+      except KeyError:
+        pass
+  else:
+    print 'Query results:'
+
+  count = len(tgt_guid)
+
+  for guid in tgt_guid:
+    line = display_ibnode(ibnodes[guid], detail, verbose)
+    if line: print line
+  print '%d found\n' % count
+
+  # plot topology
+  if graph_file:
+    plot_topology(ibnodes, tgt_guid, links, graph_file+".png", verbose)
+
+  # stop here if this is just a dryrun
+  if dryrun:
+    return
+
+  # check routing
+  if check_route:
+    if count > 2:
+      warning('More than 2 end points found, will use the first two to retrive routing info')
+    if count < 2:
+      error('Less than 2 end points found, not able to retrieve routing info')
+    print 'Routing info:'
+    ibtracert(ibnodes[tgt_guid[0]], ibnodes[tgt_guid[1]], verbose)
+
+  # check sminfo
+  if check_sm:
+    sminfo = []
+    print 'Scanning fabric ...'
+
+    # start threading
+    start = time.time()
+    nointerrupt = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    sminfo_input_queue = Queue.Queue()
+    sminfo_output_queue = Queue.Queue()
+
+    # creating input queue for threading
+    for guid in tgt_guid:
+      sminfo_input_queue.put((ibnodes[guid], verbose))
+
+    # start threads, put results in output queue
+    for i in range(len(tgt_guid)):
+      threading.Thread(target=sminfo_threading, args=(sminfo_input_queue, \
+        sminfo_output_queue)).start()
+
+    # send 'STOP' signal to all threads
+    for i in range(len(tgt_guid)):
+      sminfo_input_queue.put('STOP')
+
+    # collect results from output queue
+    for guid in tgt_guid:
+      sminfo.extend(sminfo_output_queue.get())
+
+    # end threading
+    signal.signal(signal.SIGINT, nointerrupt)
+    end = time.time()
+
+    print 'Subnet Manager info:'
+    line = ''
+    sminfo.sort(key = lambda sm: (sm['tag'], sm['desc']))
+    for each in sminfo:
+      if each:
+        line += '  %-14s: guid 0x%016x lid %4d activity %10d priority %2d state %2d [%s]\n' % \
+          (each['tag'], each['guid'], each['lid'], each['activity'], \
+          each['priority'], each['state'], each['desc'])
+    print line[:-1]
+    print '%d Subnet Managers found' % len(sminfo)
+    print '%.2f seconds spent on fetching %d ibnodes for Subnet Manager info' % \
+      ((end-start), len(tgt_guid))
+
+  # check errors
+  if check_error:
+    try:
+      if not batch:
+        # initialize screen
+        screen = screen_start()
+        screen.timeout(0)
+        ibperf_counter = ibperf_err1
+      else:
+        ibperf_counter = ibperf_counters
+      page = 0
+      maxpage = 0
+      firstfield = 0
+
+      while True:
+        perf_counters = []
+        if not batch:
+          (screen_y, screen_x) = screen.getmaxyx()
+          screen.move(0, 0)
+          screen.clrtoeol()
+          screen.addstr(0, 0, 'Scanning fabric ...')
+          screen.addstr(0, screen_x - len('page %d/%d' % (page, maxpage)), \
+            'page %d/%d' % (page, maxpage))
+          screen.refresh()
+        else:
+          print 'Scanning fabric ...'
+
+        # start threading
+        start = time.time()
+        nointerrupt = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        perfquery_input_queue = Queue.Queue()
+        perfquery_output_queue = Queue.Queue()
+
+        # creating input queue for threading
+        for guid in tgt_guid:
+          perfquery_input_queue.put((ibnodes[guid], check_reset, detail, verbose))
+
+        # make sure we only clear counters once
+        check_reset = False
+
+        # start threads, put results in output queue
+        for i in range(threads):
+          threading.Thread(target=perfquery_threading, \
+            args=(perfquery_input_queue, perfquery_output_queue)).start()
+
+        # send 'STOP' signal to all threads
+        for i in range(threads):
+          perfquery_input_queue.put('STOP')
+
+        # collect results from output queue
+        for i in range(len(tgt_guid)):
+          try:
+            perf_counters.extend(perfquery_output_queue.get(timeout=timeout))
+          except Queue.Empty:
+            warning('Not all ports returned before timeout')
+            pass
+
+        # end threading
+        signal.signal(signal.SIGINT, nointerrupt)
+        end = time.time()
+
+        # filter results
+        ports_scanned = len(perf_counters)
+        perf_counters = filter_perfquery(perf_counters, showall, verbose)
+        ports_showed  = len(perf_counters)
+
+        # recalculate max pages
+        if not batch:
+          maxpage = len(perf_counters) / (screen_y-4)
+
+        # capture keyboard inputs
+        if not batch:
+          # define keymap for '0-9, a-f'
+          keymap = range(48, 58)+range(97, 103)
+          input = screen.getch()
+          while input != -1:
+            if input in [ord('q'), 27]:
+              # terminating screen
+              screen_end()
+              return
+            elif input in [ord('h')]:
+              display_perfquery_help(screen, verbose)
+            elif input in keymap:
+              if ibperf_counters[keymap.index(input)] in ibperf_counter:
+                ibperf_counter.remove(ibperf_counters[keymap.index(input)])
+              else:
+                ibperf_counter.append(ibperf_counters[keymap.index(input)])
+            elif input in [ord('n'), curses.KEY_NPAGE, curses.KEY_DOWN] and \
+              page < maxpage:
+              page += 1
+            elif input in [ord('p'), curses.KEY_PPAGE, curses.KEY_UP] and \
+              page > 0:
+              page -= 1
+            elif input in [curses.KEY_HOME]:
+              page = 0
+            elif input in [curses.KEY_END]:
+              page = maxpage
+            elif input in [ord(','), curses.KEY_RIGHT] and firstfield < \
+              len(ibperf_counter):
+              firstfield += 1
+            elif input in [ord('.'), curses.KEY_LEFT] and firstfield > 0:
+              firstfield -= 1
+            elif input in [ord(' ')]:
+              showall = not showall
+              page = 0
+            elif input in [ord('r')]:
+              check_reset = True
+            input = screen.getch()
+
+        # print header
+        if not batch:
+          screen.clear()
+          (screen_y, screen_x) = screen.getmaxyx()
+          screen.addstr(0, 0, 'Performace counter info:')
+          screen.addstr(0, screen_x - len('page %d/%d' % (page, maxpage)), \
+            'page %d/%d' % (page, maxpage))
+          screen.addstr(1, 0, '%.2f seconds spent on scanning %d ibnodes (%s)' % \
+            ((end-start), len(tgt_guid), datetime.datetime.now()))
+        else:
+          print 'Performace counter info:'
+          print '%.2f seconds spent on scanning %d ibnodes (%s)' % ((end-start), \
+            len(tgt_guid), datetime.datetime.now())
+
+        # display performance counters
+        if perf_counters:
+          if batch:
+            screen = None
+          # start to output from screen position (0, 3)
+          perf_counters_line = display_perfquery(screen, perf_counters, \
+            sorted(ibperf_counter), firstfield, 0, 3, page, batch, verbose)
+          if batch:
+            perf_counters_line = '%d ports scanned, %d showed\n' % \
+              (ports_scanned, ports_showed) + perf_counters_line
+          else:
+            perf_counters_line = '%d ports scanned, %d showed' % \
+              (ports_scanned, ports_showed)
+        else:
+          perf_counters_line = 'Empty performance counters'
+
+        # print stats
+        if not batch:
+          screen.addstr(2, 0, perf_counters_line)
+          screen.refresh()
+        else:
+          print perf_counters_line
+
+        # break after a certain iterations if running in batch mode
+        if batch:
+          iteration -= 1
+          if iteration <= 0:
+            break
+
+        time.sleep(interval)
+    except:
+      if not batch:
+        screen_end()
+      traceback.print_exc()
+
+
+#main()
+if __name__ == '__main__':
+  main(sys.argv[0], sys.argv[1:])
