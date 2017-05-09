@@ -1,7 +1,6 @@
 # PREREQUISITE
   * infiniband-diags
   * Graphviz and pydot (optional, for visualizing topology only)
-Help on module ibcheck:
 
 
 # DOCUMENTATION
