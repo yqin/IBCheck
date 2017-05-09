@@ -1,6 +1,6 @@
-**PREREQUISITE**
-  1. infiniband-diags
-  2. Graphviz and pydot (optional, for visualizing topology only)
+# PREREQUISITE
+  * infiniband-diags
+  * Graphviz and pydot (optional, for visualizing topology only)
 Help on module ibcheck:
 
 
