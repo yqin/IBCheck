@@ -29,7 +29,7 @@ IBCHECK files:
 
      Fabric definition file provides a key/value pair definition for a given
      GUID/NodeDesc (node description) mapping.  It can also be organized as
-     virtual clusters which is useful when used with "-C" option. E.g.,
+     virtual fabric which is useful when used with "-C" option. E.g.,
 
        [lustre]
        0x0005ad00001df29a=ib000.lustre (Cisco SFS7000D, W29-36)
@@ -43,7 +43,7 @@ IBCHECK files:
      Topology definition file has the same format as the output from
      "ibnetdiscover" command.  When this file is provided, IBCHECK will perform
      topology comparison (see topology analyzer section for details).  The best
-     practice for creating such file would be during the fabric bring-up stage 
+     practice for creating such file would be during the fabric bring-up stage,
      after everything is tested and confirmed in a good working manner.  One
      can use the following command to generate this file.
 
@@ -55,7 +55,7 @@ IBCHECK fabric selection:
 However the following options can also be used to further narrow down the 
 portion of the fabric to work with.
 
-  1. By pre-defined virtual cluster in the fabric file: -C <CLUSTER>
+  1. By pre-defined virtual fabric in the fabric file: -c <CONF> -C <FABRIC>
   2. By device type: -T <TYPE>
   3. By spine index: -S <SPINE>
   4. By leaf/line index: -L <LEAF>
@@ -66,9 +66,9 @@ portion of the fabric to work with.
   9  By link width: -w <WIDTH>
 
   One can also use the "-A" option to switch from the default "or" operation 
-to an "and" operation to further manipulate the selection.  In complicated 
-environment, it is recommended to construct a virtual cluster and use "-C" 
-to control the target selection.
+to an "and" operation to further control the selection.  In complex environment,
+it is recommended to construct a virtual fabric and use "-C" to control the
+target selection.
 
 
 IBCHECK detail level:
@@ -86,8 +86,8 @@ IBCHECK is provided, it shows different level of details of the fabric.
 
   If a topology file is provided, IBCHECK will compare the current physical 
 fabric with the fabric defined in the topology file to identify differences.  
-It is useful when troubleshooting large fabric with dead/missing links or ib 
-devices, or comparing the fabric changes.
+It is useful when troubleshooting large fabric with dead/dropped links or ib 
+devices, or comparing fabric changes.
 
   Topology analyzer also has a visualization component ("-G") which requires
 graphviz and pydot packages to be available.  This feature is experimental.
@@ -141,75 +141,75 @@ times the PM scanner should be run in the batch mode.
 
 
 Examples:
-  1. ibcheck -h
+  1. wwibcheck -h
      Display the help page.
 
-  2. ibcheck
+  2. wwibcheck
      Sweep the fabric, display device counts.
 
-  3. ibcheck -d
+  3. wwibcheck -d
      Sweep the fabric, display all devices found.
 
-  4. ibcheck -dd
+  4. wwibcheck -dd
      Sweep the fabric, display all devices, as well as active ports.
 
-  5. ibcheck -ddd
+  5. wwibcheck -ddd
      Sweep the fabric, display all devices and all ports.
 
-  6. ibcheck -N n0000 -d
+  6. wwibcheck -N n0000 -d
      Display all devices on the fabric with a node description starting with
      "n0000".
 
-  7. ibcheck -f fabrics.conf -d
+  7. wwibcheck -f fabrics.conf -d
      Display all devices, use their designated node description defined in 
      fabrics.conf
 
-  8. ibcheck -f fabrics.conf -N n0000 -d
+  8. wwibcheck -f fabrics.conf -N n0000 -d
      Display all devices with a node description starting with "n0000", use 
      their designated node descriptions.
 
-  9. ibcheck -f fabrics.conf -N n0000.lr -d
+  9. wwibcheck -f fabrics.conf -N n0000.lr -d
      Display device which has a node description "n0000.lr" defined in 
      fabrics.conf
 
-  10. ibcheck -f fabrics.conf -t ibnetdiscover_lr.txt
-      Sweep the fabric, compare it with the fabric defined in 
+  10. wwibcheck -f fabrics.conf -t ibnetdiscover_lr.txt
+      Sweep the fabric, compare it with the fabric topology defined in 
       "ibnetdiscover_lr.txt".  This helps to identify dead links/devices
       immediately.
 
-  11. ibcheck -f fabrics.conf -C lr -d
-      Sweep the fabric, only show devices defined in virtual cluster "lr".
+  11. wwibcheck -f fabrics.conf -C lr -d
+      Sweep the fabric, only show devices defined in virtual fabric "lr".
 
-  12. ibcheck -f fabrics.conf -N ib000.lr,n0000.lr -d
+  12. wwibcheck -f fabrics.conf -N ib000.lr,n0000.lr -d
       Only display devices "ib000.lr" and "n0000.lr".
 
-  13. ibcheck -f fabrics.conf -g 0x0002c90200431448 -d
+  13. wwibcheck -f fabrics.conf -g 0x0002c90200431448 -d
       Only display device with a GUID "0x0002c90200431448".
 
-  14. ibcheck -f fabrics.conf -l 32 -d
+  14. wwibcheck -f fabrics.conf -l 32 -d
       Only display device with a LID "32".
 
-  15. ibcheck -f fabrics.conf -dd -M
+  15. wwibcheck -f fabrics.conf -dd -M
       Scan and display all subnet managers on the fabric.
 
-  16. ibcheck -f fabrics.conf -dd -E
+  16. wwibcheck -f fabrics.conf -dd -E
       Activate the Monitor mode of the PM scanner, run with a 60 seconds
-      interval, until 'q' is pressed.
+      interval, until 'q' or 'ESC' is pressed.
 
-  17. ibcheck -f fabrics.conf -dd -C lr -E -i5
-      Monitor the error counters of the virtual cluster "lr", with a scan
+  17. wwibcheck -f fabrics.conf -dd -C lr -E -i5
+      Monitor the error counters of the virtual fabric "lr", with a scan
       interval of 5 seconds.
 
-  18. ibcheck -f fabrics.conf -dd -C lr -E -b
-      Activate the Batch mode of the PM scanner on the virtual cluster "lr", 
+  18. wwibcheck -f fabrics.conf -dd -C lr -E -b
+      Activate the Batch mode of the PM scanner on the virtual fabric "lr", 
       run once and exit.
 
-  19. ibcheck -f fabrics.conf -dd -C lr -E -b -i5 -n3
+  19. wwibcheck -f fabrics.conf -dd -C lr -E -b -i5 -n3
       Run PM scanner in Batch mode, run 3 times with a scan interval of 5 
       seconds.
 
-  20. ibcheck -f fabrics.conf -dd -C lr -E -r -i5
-      Reset error counters on the virtual cluster "lr", then start PM scanner 
+  20. wwibcheck -f fabrics.conf -dd -C lr -E -r -i5
+      Reset error counters on the virtual fabric "lr", then start PM scanner 
       in Monitor mode with a scan interval of 5 seconds.
 
 
