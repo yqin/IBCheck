@@ -599,7 +599,7 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
     return ibports
 
   # RE for ibport
-  port_pattern = re.compile(r'\[(?P<port>\d+)\](\((?P<portguid>.*)\))?\s+\"(?P<tonodeguid>.*)\"\[(?P<tonodeport>\d+)\](\((?P<toportguid>.*)\))?\s+\#\s+(lid\s+(?P<portlid>\d+)\s+lmc\s+(?P<portlmc>\d+)\s+)?\"(?P<tonodedesc>.*)\"\s+lid\s+(?P<toportlid>\d+)\s+(?P<width>\d+)x(?P<speed>(SDR|DDR|QDR|FDR))$')
+  port_pattern = re.compile(r'\[(?P<port>\d+)\](\((?P<portguid>.*)\))?\s+\"(?P<tonodeguid>.*)\"\[(?P<tonodeport>\d+)\](\((?P<toportguid>.*)\))?\s+\#\s+(lid\s+(?P<portlid>\d+)\s+lmc\s+(?P<portlmc>\d+)\s+)?\"(?P<tonodedesc>.*)\"\s+lid\s+(?P<toportlid>\d+)\s+(?P<width>\d+)x(?P<speed>(SDR|DDR|QDR|FDR|EDR|HDR|NDR|XDR))$')
 
   ports = ibnode['nodeports'].split('\n')
   for port in ports:
@@ -1264,7 +1264,7 @@ def help(myname):
   print '  -P, --port <PORT>         query one or more ports (comma separated)'
   print '  -r, --reset               reset error counters once'
   print '  -R, --route               query routing info'
-  print '  -s, --speed <SPEED>       query one or more SPEEDs [SDR|DDR|QDR|FDR] (comma separated)'
+  print '  -s, --speed <SPEED>       query one or more SPEEDs [SDR|DDR|QDR|FDR|EDR|HDR|NDR|XDR] (comma separated)'
   print '  -S, --spine <SPINE>       query one or more SPINEs (comma separated)'
   print '  -t, --topo <TOPOFILE>     topology file'
   print '  -T, --type <TYPE>         query one or more TYPEs %s (comma separated)' % ibnode_type
