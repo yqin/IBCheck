@@ -483,8 +483,14 @@ def parse_topology(topo_string, guid_desc_mapping, dryrun=False, verbose=False):
       port = ibport['port']
       toguid = ibport['tonodeguid']
       toport = ibport['tonodeport']
-      if toguid and ((toguid, toport), (guid, port)) not in links:
-        links.append(((guid, port), (toguid, toport)))
+      speed = ibport['speed']
+      width = ibport['width']
+      # link[0] = (guid, port)
+      # link[1] = (toguid, toport)
+      # link[2] = speed
+      # link[3] = width
+      if toguid and ((toguid, toport), (guid, port), speed, width) not in links:
+        links.append(((guid, port), (toguid, toport), speed, width))
 
   return ibnodes, ibnodes_index, links
 
@@ -856,7 +862,25 @@ def plot_topology(ibnodes, tgt_guid, links, graph_file, verbose=False):
         guid = '0x%016x' % ibnodes[link[0][0]]['nodeguid']
         endpoint1 = ibnodes[link[1][0]]['desc'] + '\n' + guid
 
-      graph.add_edge(pydot.Edge(endpoint0, endpoint1))
+      speed = link[2]
+      width = link[3]
+
+      if speed == 'SDR':
+        color = 'red'
+      elif speed == 'DDR':
+        color = 'orange'
+      elif speed == 'QDR':
+        color = 'yellow'
+      elif speed == 'FDR':
+        color = 'gold'
+      elif speed == 'EDR':
+        color = 'cyan'
+      elif speed == 'HDR':
+        color = 'blue'
+      else:
+        color = 'green'
+
+      graph.add_edge(pydot.Edge(endpoint0, endpoint1, color=color, penwidth=width))
 
   graph.write(graph_file, prog='dot', format='png')
 
