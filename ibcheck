@@ -841,8 +841,22 @@ def plot_topology(ibnodes, tgt_guid, links, graph_file, verbose=False):
 
   for link in links:
     if link[0][0] in tgt_guid and link[1][0] in tgt_guid:
-      graph.add_edge(pydot.Edge(ibnodes[link[0][0]]['desc'], \
-                     ibnodes[link[1][0]]['desc']))
+      endpoint0 = ibnodes[link[0][0]]['desc']
+      endpoint1 = ibnodes[link[1][0]]['desc']
+
+      # "Aggregation Node" has a common description so adding the GUID to
+      # differentiate it
+      if ibnodes[link[0][0]]['desc'] in \
+            ['Mellanox Technologies Aggregation Node']:
+        guid = '0x%016x' % ibnodes[link[0][0]]['nodeguid']
+        endpoint0 = ibnodes[link[0][0]]['desc'] + '\n' + guid
+
+      if ibnodes[link[1][0]]['desc'] in \
+            ['Mellanox Technologies Aggregation Node']:
+        guid = '0x%016x' % ibnodes[link[0][0]]['nodeguid']
+        endpoint1 = ibnodes[link[1][0]]['desc'] + '\n' + guid
+
+      graph.add_edge(pydot.Edge(endpoint0, endpoint1))
 
   graph.write(graph_file, prog='dot', format='png')
 
