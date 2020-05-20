@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 """Swiss army knife for Infiniband (IB) troubleshooting.
 
 ############################################################################
@@ -263,8 +263,11 @@ collect_list = ['nodedesc', 'desc', 'nodeguid', 'nodelid', 'type', 'portguid', \
 # performance counters
 ibperf_err1 = ['LinkDowned', 'LinkIntegrityErrors', 'LinkRecovers', \
                'RcvErrors', 'SymbolErrors', 'VL15Dropped', 'XmtDiscards']
-ibperf_err2 = ['ExcBufOverrunErrors', 'RcvConstraintErrors', \
-               'RcvRemotePhysErrors', 'RcvSwRelayErrors', 'XmtConstraintErrors']
+ibperf_err1 = ['LinkDowned', 'LinkRecovers', 'RcvErrors', \
+               'RcvConstraintErrors', 'RcvRemotePhysErrors', 'RcvSwRelayErrors', \
+               'SymbolErrors', 'XmtConstraintErrors', 'XmtDiscards', ]
+ibperf_err2 = ['ExcBufOverrunErrors', 'LinkIntegrityErrors', 'QP1Dropped', \
+               'VL15Dropped', 'XmtWait']
 ibperf_data = ['RcvData', 'RcvPkts', 'XmtData', 'XmtPkts']
 ibperf_errs = ibperf_err1 + ibperf_err2
 ibperf_counters = ibperf_errs + ibperf_data
@@ -284,6 +287,7 @@ ibperf_hash = { \
                'PortXmitDiscards'             : 'XmtDiscards', \
                'PortXmitPkts'                 : 'XmtPkts', \
                'PortXmitWait'                 : 'XmtWait', \
+               'QP1Dropped'                   : 'QP1Dropped', \
                'SymbolErrorCounter'           : 'SymbolErrors', \
                'VL15Dropped'                  : 'VL15Dropped', \
               }
@@ -297,10 +301,12 @@ ibperf_errs_threshold = {'ExcBufOverrunErrors' : 10,
                          'RcvErrors'           : 10,
                          'RcvRemotePhysErrors' : 100,
                          'RcvSwRelayErrors'    : 100,
+                         'QP1Dropped'          : 10,
                          'SymbolErrors'        : 10,
                          'VL15Dropped'         : 100,
                          'XmtConstraintErrors' : 100,
-                         'XmtDiscards'         : 100
+                         'XmtDiscards'         : 100,
+                         'XmtWait'             : 100
                         }
 
 
@@ -423,7 +429,7 @@ def parse_config(config_file, clusters, verbose=False):
   return guid_desc_mapping
 
 
-def parse_topology(topo_string, guid_desc_mapping, dryrun=False, verbose=False):
+def parse_topology(topo_string, guid_desc_mapping, hca='', dryrun=False, verbose=False):
   """
   Parse the topology file which has the ibnetdiscover format, return ibnodes,
   indices of ibnodes, and link pairs.
@@ -495,7 +501,7 @@ def parse_topology(topo_string, guid_desc_mapping, dryrun=False, verbose=False):
   return ibnodes, ibnodes_index, links
 
 
-def parse_ibnode(block, guid_desc_mapping, dryrun=False, verbose=False):
+def parse_ibnode(block, guid_desc_mapping, hca='', dryrun=False, verbose=False):
   """
   Parse an ibnode, categarize if it is a spine, leaf, or ca.
   """
@@ -528,12 +534,15 @@ def parse_ibnode(block, guid_desc_mapping, dryrun=False, verbose=False):
       ibnode['nodeguid'] = ibnode['switchguid']
       # check if this ibnode is online or not
       if not dryrun:
-        if WITH_ROOT:
-          cmd = 'ibaddr -G %s'
+        if hca:
+          cmd = 'ibaddr -C %s -G %s' % (hca, ibnode['nodeguid'])
         else:
-          cmd = 'sudo ibaddr -G %s'
+          cmd = 'ibaddr -G %s' % ibnode['nodeguid']
 
-        result = run_cmd(cmd % ibnode['nodeguid'])
+        if not WITH_ROOT:
+          cmd = 'sudo %s' % cmd
+
+        result = run_cmd(cmd)
         if result['retval']:
           warning('%s found on the fabric but not alive' % ibnode['nodeguid'])
           return None
@@ -885,16 +894,21 @@ def plot_topology(ibnodes, tgt_guid, links, graph_file, verbose=False):
   graph.write(graph_file, prog='dot', format='png')
 
 
-def ibtracert(ibnode1, ibnode2, verbose=False):
+def ibtracert(ibnode1, ibnode2, hca='', verbose=False):
   """
   Display routing info between two Node GUIDs.
   """
   text_line = ''
   # run ibtracert to retrieve routing info
-  if WITH_ROOT:
-    cmd = 'ibtracert -G %s %s'
+  if hca:
+    cmd = 'ibtracert -C %s' % hca
   else:
-    cmd = 'sudo ibtracert -G %s %s'
+    cmd = 'ibtracert'
+
+  if WITH_ROOT:
+    cmd = cmd + ' -G %s %s'
+  else:
+    cmd = 'sudo ' + cmd + ' -G %s %s'
 
   if ibnode1['type'] in ['Ca']:
     guids1 = [ibport['portguid'] for ibport in ibnode1['nodeports']]
@@ -917,7 +931,7 @@ def ibtracert(ibnode1, ibnode2, verbose=False):
   print text_line[:-1]
 
 
-def sminfo(ibnode, verbose=False):
+def sminfo(ibnode, hca='', verbose=False):
   """
   Run sminfo externally to collect SM info.
   """
@@ -925,10 +939,15 @@ def sminfo(ibnode, verbose=False):
   ret_lines = ''
   sminfo = []
 
-  if WITH_ROOT:
-    cmd = 'sminfo -G %s'
+  if hca:
+    cmd = 'sminfo -C %s' % hca
   else:
-    cmd = 'sudo sminfo -G %s'
+    cmd = 'sminfo'
+
+  if WITH_ROOT:
+    cmd = cmd +' -G %s'
+  else:
+    cmd = 'sudo ' + cmd + ' -G %s'
 
   if ibnode['nodetype'] in ['Ca']:
     for ibport in ibnode['nodeports']:
@@ -951,12 +970,12 @@ def sminfo(ibnode, verbose=False):
   return sminfo
 
 
-def sminfo_threading(input_queue, output_queue):
+def sminfo_threading(input_queue, hca, output_queue):
   """
   Collecting SM info in parallel.
   """
   for ibnode, verbose in iter(input_queue.get, 'STOP'):
-    output_queue.put(sminfo(ibnode, verbose))
+    output_queue.put(sminfo(ibnode,hca,  verbose))
 
 
 def parse_sminfo(lines, desc, verbose=False):
@@ -976,7 +995,7 @@ def parse_sminfo(lines, desc, verbose=False):
   return sminfo
 
 
-def perfquery(ibnode, reset, detail, verbose=False):
+def perfquery(ibnode, reset, detail, hca='', verbose=False):
   """
   Run perfquery externally to collect performance counters.
   """
@@ -989,16 +1008,16 @@ def perfquery(ibnode, reset, detail, verbose=False):
 
       if ibport['tonodeguid']:
         if detail >= 2:
-          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
-            verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
+            reset, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
               ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
       else:
         if detail >= 3:
-          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
-            verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
+            reset, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
@@ -1006,7 +1025,7 @@ def perfquery(ibnode, reset, detail, verbose=False):
 
   elif ibnode['nodetype'] in ['Switch']:
     if detail <= 1:
-      result = perfquery_port(ibnode['nodeguid'], '255', reset, verbose)
+      result = perfquery_port(ibnode['nodeguid'], '255', hca, reset, verbose)
       if not result['retval']:
         ret_lines += result['retstr']
         perf_counters.append(parse_perfquery(result['retstr'], \
@@ -1015,16 +1034,16 @@ def perfquery(ibnode, reset, detail, verbose=False):
     for ibport in ibnode['nodeports']:
       if ibport['tonodeguid']:
         if detail >= 2:
-          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
-            verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
+            reset, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
               ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
       else:
         if detail >= 3:
-          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
-            verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
+            reset, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
@@ -1038,20 +1057,22 @@ def perfquery(ibnode, reset, detail, verbose=False):
   return perf_counters
 
 
-def perfquery_port(guid, port, reset, verbose=False):
+def perfquery_port(guid, port, reset, hca='', verbose=False):
   """
   Run perfquery command for a single port.
   """
-  if not reset:
-    if WITH_ROOT:
-      cmd = 'perfquery -G %s %s'
-    else:
-      cmd = 'sudo perfquery -G %s %s'
+  if hca:
+    cmd = 'perfquery -C %s' % hca
   else:
-    if WITH_ROOT:
-      cmd = 'perfquery -r -G %s %s'
-    else:
-      cmd = 'sudo perfquery -r -G %s %s'
+    cmd = 'perfquery'
+
+  if reset:
+    cmd = cmd + ' -r'
+
+  if WITH_ROOT:
+    cmd = cmd + ' -G %s %s'
+  else:
+    cmd = 'sudo ' + cmd + ' -G %s %s'
 
   while True:
     result = run_cmd(cmd % (guid, port))
@@ -1068,12 +1089,12 @@ def perfquery_port(guid, port, reset, verbose=False):
   return result
 
 
-def perfquery_threading(input_queue, output_queue):
+def perfquery_threading(input_queue, output_queue, hca=''):
   """
   Run perfquery in parallel.
   """
   for (ibnode, reset, detail, verbose) in iter(input_queue.get, 'STOP'):
-    output_queue.put(perfquery(ibnode, reset, detail, verbose))
+    output_queue.put(perfquery(ibnode, reset, detail, hca, verbose))
 
 
 def parse_perfquery(lines, guid, lid, nodedesc, verbose=False):
@@ -1114,11 +1135,11 @@ def display_perfquery_help(screen, verbose=False):
       (screen_x-subwin_x)/2)
     subwin.clear()
     subwin.border()
-    subwin.addstr(2, 2, 'h: help n: next     ,: left')
-    subwin.addstr(3, 2, 'q: quit p: previous .: right')
-    subwin.addstr(4, 2, ' : toggle ibnodes   r: reset')
+    subwin.addstr(2, 2, 'H: help N: next     ,: left')
+    subwin.addstr(3, 2, 'Q: quit P: previous .: right')
+    subwin.addstr(4, 2, ' : toggle ibnodes   R: reset')
     for i in range(len(ibperf_counters)):
-      subwin.addstr(5+i, 2, '%x: toggle %s' % (i, ibperf_counters[i]))
+      subwin.addstr(5+i, 2, '%c: toggle %s' % (chr(97+i), ibperf_counters[i]))
   else:
     subwin = screen.subwin(1, screen_x, 0, 0)
     subwin.clear()
@@ -1290,6 +1311,7 @@ def help(myname):
   print '  -g, --guid <GUID>         query one or more GUIDs (comma separated)'
   print '  -G, --graph <GRAPH>       plot topology with graphviz and output to <GRAPH>'
   print '  -h, --help                this help page'
+  print '  -H, --hca                 HCA to use'
   print '  -i, --interval            scan interval to check errors (seconds)'
   print '  -l, --lid <LID>           query one or more LIDs (comma separated)'
   print '  -L, --leaf <LEAF>         query one or more LEAFs (comma separated)'
@@ -1324,6 +1346,7 @@ def main(myname, argv):
   topo_file   = ''
   config_file = ''
   graph_file  = ''
+  hca         = ''
   batch       = False
   check_error = False
   check_reset = False
@@ -1353,7 +1376,7 @@ def main(myname, argv):
   defined_ibnodes_index = {}
 
   try:
-    opts, args = getopt.getopt(argv, 'aAbc:C:dDEf:g:G:hi:l:L:Mn:N:O:p:P:rRs:S:t:T:vw:', \
+    opts, args = getopt.getopt(argv, 'aAbc:C:dDEf:g:G:hH:i:l:L:Mn:N:O:p:P:rRs:S:t:T:vw:', \
                  ['showall', 'and', 'batch', 'config=', 'cluster=', 'detail', \
                   'dryrun', 'error', 'fabric=', 'guid=', 'graph=', 'help', \
                   'interval=', 'lid=', 'leaf=', 'line=', 'sminfo', \
@@ -1392,6 +1415,8 @@ def main(myname, argv):
         graph_file = val
       else:
         warning('\'pydot\' is not imported, ignore \'%s %s\'' % (opt, val))
+    elif opt in ['-H', '--hca']:
+        hca = val
     elif opt in ['-i', '--interval']:
       try:
         interval = int(val)
@@ -1454,13 +1479,20 @@ def main(myname, argv):
     if verbose:
       info('Running ibnetdiscover ...')
 
-    if WITH_ROOT:
-      topo_string= run_cmd('ibnetdiscover')['retstr'] + '\n'
+    if hca:
+      cmd = 'ibnetdiscover -C %s' % hca
     else:
-      topo_string= run_cmd('sudo ibnetdiscover')['retstr'] + '\n'
+      cmd = 'ibnetdiscover'
+
+    if not WITH_ROOT:
+      cmd = 'sudo %s' % cmd
+
+    print(cmd)
+    topo_string= run_cmd(cmd)['retstr'] + '\n'
+    print(topo_string)
 
     ibnodes, ibnodes_index, links = parse_topology(topo_string, \
-      guid_desc_mapping, dryrun, verbose)
+      guid_desc_mapping, hca, dryrun, verbose)
 
   # read from pre-defined topology file
   if topo_file:
@@ -1472,7 +1504,7 @@ def main(myname, argv):
       error('Failed to read from %s' % topo_file)
     defined_topo_string= read_file(topo_file) + '\n'
     defined_ibnodes, defined_ibnodes_index, defined_links = parse_topology( \
-      defined_topo_string, guid_desc_mapping, True, verbose)
+      defined_topo_string, guid_desc_mapping, '', True, verbose)
     if dryrun:
       ibnodes = defined_ibnodes
       ibnodes_index = defined_ibnodes_index
@@ -1584,7 +1616,7 @@ def main(myname, argv):
     if count < 2:
       error('Less than 2 end points found, not able to retrieve routing info')
     print 'Routing info:'
-    ibtracert(ibnodes[tgt_guid[0]], ibnodes[tgt_guid[1]], verbose)
+    ibtracert(ibnodes[tgt_guid[0]], ibnodes[tgt_guid[1]], hca, verbose)
 
   # check sminfo
   if check_sm:
@@ -1599,7 +1631,7 @@ def main(myname, argv):
 
     # creating input queue for threading
     for guid in tgt_guid:
-      sminfo_input_queue.put((ibnodes[guid], verbose))
+      sminfo_input_queue.put((ibnodes[guid], hca, verbose))
 
     # start threads, put results in output queue
     for i in range(len(tgt_guid)):
@@ -1674,7 +1706,7 @@ def main(myname, argv):
         # start threads, put results in output queue
         for i in range(threads):
           threading.Thread(target=perfquery_threading, \
-            args=(perfquery_input_queue, perfquery_output_queue)).start()
+            args=(perfquery_input_queue, perfquery_output_queue, hca)).start()
 
         # send 'STOP' signal to all threads
         for i in range(threads):
@@ -1703,25 +1735,25 @@ def main(myname, argv):
 
         # capture keyboard inputs
         if not batch:
-          # define keymap for '0-9, a-f'
-          keymap = range(48, 58)+range(97, 103)
+          # define keymap for 'a-z'
+          keymap = range(97, 123)
           input = screen.getch()
           while input != -1:
-            if input in [ord('q'), 27]:
+            if input in [ord('Q'), 27]:
               # terminating screen
               screen_end()
               return
-            elif input in [ord('h')]:
+            elif input in [ord('H')]:
               display_perfquery_help(screen, verbose)
             elif input in keymap:
               if ibperf_counters[keymap.index(input)] in ibperf_counter:
                 ibperf_counter.remove(ibperf_counters[keymap.index(input)])
               else:
                 ibperf_counter.append(ibperf_counters[keymap.index(input)])
-            elif input in [ord('n'), curses.KEY_NPAGE, curses.KEY_DOWN] and \
+            elif input in [ord('N'), curses.KEY_NPAGE, curses.KEY_DOWN] and \
               page < maxpage:
               page += 1
-            elif input in [ord('p'), curses.KEY_PPAGE, curses.KEY_UP] and \
+            elif input in [ord('P'), curses.KEY_PPAGE, curses.KEY_UP] and \
               page > 0:
               page -= 1
             elif input in [curses.KEY_HOME]:
@@ -1736,7 +1768,7 @@ def main(myname, argv):
             elif input in [ord(' ')]:
               showall = not showall
               page = 0
-            elif input in [ord('r')]:
+            elif input in [ord('R')]:
               check_reset = True
             input = screen.getch()
 
