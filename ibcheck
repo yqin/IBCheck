@@ -1008,16 +1008,16 @@ def perfquery(ibnode, reset, detail, hca='', verbose=False):
 
       if ibport['tonodeguid']:
         if detail >= 2:
-          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
-            reset, verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+                   hca, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
               ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
       else:
         if detail >= 3:
-          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
-            reset, verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+                   hca, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
@@ -1025,7 +1025,7 @@ def perfquery(ibnode, reset, detail, hca='', verbose=False):
 
   elif ibnode['nodetype'] in ['Switch']:
     if detail <= 1:
-      result = perfquery_port(ibnode['nodeguid'], '255', hca, reset, verbose)
+      result = perfquery_port(ibnode['nodeguid'], '255', reset, hca, verbose)
       if not result['retval']:
         ret_lines += result['retstr']
         perf_counters.append(parse_perfquery(result['retstr'], \
@@ -1034,16 +1034,16 @@ def perfquery(ibnode, reset, detail, hca='', verbose=False):
     for ibport in ibnode['nodeports']:
       if ibport['tonodeguid']:
         if detail >= 2:
-          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
-            reset, verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+                   hca, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
               ibport['portguid'], ibport['portlid'], ibnode['desc'], verbose))
       else:
         if detail >= 3:
-          result = perfquery_port(ibport['portguid'], ibport['port'], hca, \
-            reset, verbose)
+          result = perfquery_port(ibport['portguid'], ibport['port'], reset, \
+                   hca, verbose)
           if not result['retval']:
             ret_lines += result['retstr']
             perf_counters.append(parse_perfquery(result['retstr'], \
