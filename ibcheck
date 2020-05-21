@@ -1487,9 +1487,7 @@ def main(myname, argv):
     if not WITH_ROOT:
       cmd = 'sudo %s' % cmd
 
-    print(cmd)
     topo_string= run_cmd(cmd)['retstr'] + '\n'
-    print(topo_string)
 
     ibnodes, ibnodes_index, links = parse_topology(topo_string, \
       guid_desc_mapping, hca, dryrun, verbose)
