@@ -274,7 +274,7 @@ ibperf_err2 = ['ExcBufOverrunErrors', 'LinkIntegrityErrors', 'QP1Dropped', \
                'RcvConstraintErrors', 'RcvRemotePhysErrors', 'RcvSwRelayErrors', \
                'VL15Dropped', 'XmtConstraintErrors', 'XmtDiscards', 'XmtWait']
 ibperf_data = ['MulticastRcvPkts', 'MulticastXmitPkts', 'RcvData', 'RcvPkts', \
-               'XmtData', 'XmtPkts', 'UnicastRcvPkts', 'UnicastXmitPkts']
+               'UnicastRcvPkts', 'UnicastXmitPkts', 'XmtData', 'XmtPkts']
 ibperf_errs = ibperf_err1 + ibperf_err2
 ibperf_counters = ibperf_errs + ibperf_data
 ibperf_hash = { \
