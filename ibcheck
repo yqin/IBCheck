@@ -1595,7 +1595,7 @@ def main(myname, argv):
   # if no query, output all components found
   if not (dest_cluster or dest_guid or dest_lid or dest_nodedesc or dest_speed \
     or dest_width or dest_type or dest_spine or dest_leaf):
-    print('fabric topology:')
+    print('Fabric topology:')
     for type in ibnode_type:
       try:
         tgt_guid.extend(ibnodes_index['type'][type])
@@ -1786,7 +1786,7 @@ def main(myname, argv):
         if not batch:
           screen.clear()
           (screen_y, screen_x) = screen.getmaxyx()
-          screen.addstr(0, 0, 'Performace counter info:')
+          screen.addstr(0, 0, 'Performance counter info:')
           screen.addstr(0, screen_x - len('page %d/%d' % (page, maxpage)), \
             'page %d/%d' % (page, maxpage))
           screen.addstr(1, 0, '%.2f seconds spent on scanning %d ibnodes (%s)' % \
@@ -1804,10 +1804,10 @@ def main(myname, argv):
           perf_counters_line = display_perfquery(screen, perf_counters, \
             sorted(ibperf_counter), firstfield, 0, 3, page, batch, verbose)
           if batch:
-            perf_counters_line = '%d ports scanned, %d showed\n' % \
+            perf_counters_line = '%d ports scanned, %d shown\n' % \
               (ports_scanned, ports_showed) + perf_counters_line
           else:
-            perf_counters_line = '%d ports scanned, %d showed' % \
+            perf_counters_line = '%d ports scanned, %d shown' % \
               (ports_scanned, ports_showed)
         else:
           perf_counters_line = 'Empty performance counters'
