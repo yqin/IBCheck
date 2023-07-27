@@ -325,7 +325,7 @@ def error(message, errcode = -1):
   """
   Print the error message and exit with an error code.
   """
-  print('Error: %s' % (message), file=sys.stderr)
+  print(f'Error: {message}', file=sys.stderr)
   sys.exit(errcode)
 
 
@@ -333,14 +333,14 @@ def warning(message):
   """
   Print the warning message.
   """
-  print('Warning: %s' % (message), file=sys.stderr)
+  print(f'Warning: {message}', file=sys.stderr)
 
 
 def info(message):
   """
   Print the info message.
   """
-  print('Info: %s' % (message), file=sys.stderr)
+  print(f'Info: {message}', file=sys.stderr)
 
 
 def cpu_number():
@@ -380,7 +380,7 @@ def assert_file(file):
   Assert if file does not exist.
   """
   if not os.path.isfile(file):
-    raise RuntimeError('Can not find file \"%s\"' % file)
+    raise RuntimeError(f'Can not find file "{file}"')
 
 
 def read_file(file):
@@ -394,7 +394,7 @@ def read_file(file):
     lines = out.read()
     out.close()
   except:
-    raise RuntimeError('Failed to read from \"%s\"' % file)
+    raise RuntimeError(f'Failed to read from "{file}"')
   return lines
 
 
@@ -413,12 +413,12 @@ def parse_config(config_file, clusters, verbose=False):
   Parse fabric config file, obtain guid <-> desc (hostname) mapping.
   """
   if verbose:
-    info('Reading config file %s ...' % config_file)
+    info(f'Reading config file {config_file} ...')
 
   try:
     assert_file(config_file)
   except RuntimeError:
-    error('Failed to read from %s' % config_file)
+    error(f'Failed to read from {config_file}')
 
   guid_desc_mapping = {}
 
@@ -428,7 +428,7 @@ def parse_config(config_file, clusters, verbose=False):
 
   # sanity check
   if clusters and not set(clusters).issubset(set(config_clusters)):
-    error('Not all clusters in %s are defined in %s' % (clusters, config_file))
+    error(f'Not all clusters in {clusters} are defined in {config_file}')
 
   # if no clusters are defined
   if not clusters:
@@ -547,21 +547,21 @@ def parse_ibnode(block, guid_desc_mapping, hca='', dryrun=False, verbose=False):
       # check if this ibnode is online or not
       if not dryrun:
         if hca:
-          cmd = 'ibaddr -C %s -G %s' % (hca, ibnode['nodeguid'])
+          cmd = f"ibaddr -C {hca} -G {ibnode['nodeguid']}"
         else:
-          cmd = 'ibaddr -G %s' % ibnode['nodeguid']
+          cmd = f"ibaddr -G {ibnode['nodeguid']}"
 
         if not WITH_ROOT:
-          cmd = 'sudo %s' % cmd
+          cmd = f'sudo {cmd}'
 
         result = run_cmd(cmd)
         if result['retval']:
-          warning('%s found on the fabric but not alive' % ibnode['nodeguid'])
+          warning(f"{ibnode['nodeguid']} found on the fabric but not alive")
           return None
     elif ibnode['nodetype'] in ['Ca']:
       ibnode['nodeguid'] = ibnode['caguid']
     else:
-      warning('Unknown IB node type %s' % ibnode['nodetype'])
+      warning(f"Unknown IB node type {ibnode['nodetype']}")
 
     # generalize model, type, and typeindex
     if ibnode['nodetype'] in ['Ca']:
@@ -610,7 +610,7 @@ def parse_ibnode(block, guid_desc_mapping, hca='', dryrun=False, verbose=False):
     ibnode['nodeports'] = parse_ports(ibnode, guid_desc_mapping, verbose)
   else:
     if verbose:
-      warning('Cannot parse the following section:\n%s' % block)
+      warning(f'Cannot parse the following section:\n{block}')
 
   return ibnode
 
@@ -647,8 +647,8 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
       if ibport['tonodeguid'] and not ibport['toportguid']:
         ibport['toportguid'] = ibport['tonodeguid']
       for key in ['guid', 'lid', 'lmc']:
-        if not ibport['port%s' % key]:
-          ibport['port%s' % key] = ibnode['node%s' % key]
+        if not ibport[f'port{key}']:
+          ibport[f'port{key}'] = ibnode[f'node{key}']
       for key in ['port', 'portguid', 'tonodeguid', 'tonodeport',
                   'toportguid', 'portlid', 'portlmc', 'toportlid', 'width']:
         if key and (isinstance(ibport[key], type(''))):
@@ -663,7 +663,7 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
       ibports.append(ibport)
     else:
       if verbose:
-        warning('Cannot parse the following section:\n%s' % port)
+        warning(f'Cannot parse the following section:\n{port}')
 
   # complete ports that do not have a link
   for port in range(1, ibnode['portcount']+1):
@@ -704,7 +704,7 @@ def query_ibnode(ibnodes_index, dest_list, cat_list, re_string, verbose=False):
   categories provided in cat_list, and the regex defined in re_string.
   """
   if verbose:
-    info('Querying %s ...' % dest_list)
+    info(f'Querying {dest_list} ...')
 
   tgt_guid = []
   for dest in dest_list:
@@ -831,23 +831,21 @@ def compare_links(ibnodes, links1, links2, defined_first=True, verbose=False):
 
   if delta:
     if defined_first:
-      line += '%d link found in the topology file but not on the fabric:\n' \
-              % (len(delta))
+      line += f'{len(delta)} link found in the topology file but not on the fabric:\n'
     else:
-      line += '%d link found on the fabric but not in the topology file:\n' \
-              % (len(delta))
+      line += f'{len(delta)} link found on the fabric but not in the topology file:\n'
 
     for link in delta:
       try:
         desc0 = ibnodes[link[0][0]]['desc']
       except:
-        desc0 = '0x%x' % link[0][0]
+        desc0 = f'0x{link[0][0]:x}'
       try:
         desc1 = ibnodes[link[1][0]]['desc']
       except:
-        desc1 = '0x%x' % link[1][0]
+        desc1 = f'0x{link[1][0]:x}'
 
-      line += '  %s [%s] <-> %s [%s]\n' % (desc0, link[0][1], desc1, link[1][1])
+      line += f'  {desc0} [{link[0][1]}] <-> {desc1} [{link[1][1]}]\n'
 
     return line
 
@@ -857,7 +855,7 @@ def plot_topology(ibnodes, tgt_guid, links, graph_file, verbose=False):
   Plot topology with Graphviz, requires pydot.
   """
   if verbose:
-    info("Plotting topology %s ..." % graph_file)
+    info(f"Plotting topology {graph_file} ...")
 
   graph = pydot.Dot(graph_type='graph', rankdir='LR')
 
@@ -875,12 +873,12 @@ def plot_topology(ibnodes, tgt_guid, links, graph_file, verbose=False):
       # differentiate it
       if ibnodes[link[0][0]]['desc'] in \
             ['Mellanox Technologies Aggregation Node']:
-        guid = '0x%016x' % ibnodes[link[0][0]]['nodeguid']
+        guid = f"0x{ibnodes[link[0][0]]['nodeguid']:016x}"
         endpoint0 = ibnodes[link[0][0]]['desc'] + '\n' + guid
 
       if ibnodes[link[1][0]]['desc'] in \
             ['Mellanox Technologies Aggregation Node']:
-        guid = '0x%016x' % ibnodes[link[0][0]]['nodeguid']
+        guid = f"0x{ibnodes[link[0][0]]['nodeguid']:016x}"
         endpoint1 = ibnodes[link[1][0]]['desc'] + '\n' + guid
 
       speed = link[2]
@@ -913,7 +911,7 @@ def ibtracert(ibnode1, ibnode2, hca='', verbose=False):
   text_line = ''
   # run ibtracert to retrieve routing info
   if hca:
-    cmd = 'ibtracert -C %s' % hca
+    cmd = f'ibtracert -C {hca}'
   else:
     cmd = 'ibtracert'
 
@@ -936,10 +934,9 @@ def ibtracert(ibnode1, ibnode2, hca='', verbose=False):
       result = run_cmd(cmd % (guid1, guid2))
       if not result['retval']:
         for line in result['retstr'].split('\n'):
-          text_line += '  %s\n' % line
+          text_line += f'  {line}\n'
       else:
-        text_line += '  No route from %s to %s\n' % (ibnode1['nodedesc'],
-                     ibnode2['nodedesc'])
+        text_line += f"  No route from {ibnode1['nodedesc']} to {ibnode2['nodedesc']}\n"
   print(text_line[:-1])
 
 
@@ -952,7 +949,7 @@ def sminfo(ibnode, hca='', verbose=False):
   sminfo = []
 
   if hca:
-    cmd = 'sminfo -C %s' % hca
+    cmd = f'sminfo -C {hca}'
   else:
     cmd = 'sminfo'
 
@@ -976,7 +973,7 @@ def sminfo(ibnode, hca='', verbose=False):
 
   if verbose:
     for line in ret_lines.split('\n'):
-      text_line += '  %s\n' % line
+      text_line += f'  {line}\n'
     print(text_line[:-1])
 
   return sminfo
@@ -1063,7 +1060,7 @@ def perfquery(ibnode, reset, detail, hca='', verbose=False):
 
   if verbose:
     for line in ret_lines.split('\n'):
-      text_line += '  %s\n' % line
+      text_line += f'  {line}\n'
     print(text_line[:-1])
 
   return perf_counters
@@ -1074,7 +1071,7 @@ def perfquery_port(guid, port, reset, hca='', verbose=False):
   Run perfquery command for a single port.
   """
   if hca:
-    cmd = 'perfquery -x -C %s' % hca
+    cmd = f'perfquery -x -C {hca}'
   else:
     cmd = 'perfquery -x'
 
@@ -1140,7 +1137,7 @@ def display_perfquery_help(screen, verbose=False):
   (screen_y, screen_x) = screen.getmaxyx()
   subwin_y = len(ibperf_counters) + 7
   subwin_x = max(len(line) for line in
-    [' : toggle %s' % key for key in ibperf_counters]) + 5
+    [f' : toggle {key}' for key in ibperf_counters]) + 5
 
   if screen_y >= subwin_y and screen_x >= subwin_x:
     subwin = screen.subwin(subwin_y, subwin_x, (screen_y-subwin_y)/2,
@@ -1151,7 +1148,7 @@ def display_perfquery_help(screen, verbose=False):
     subwin.addstr(3, 2, 'Q: quit P: previous .: right')
     subwin.addstr(4, 2, ' : toggle ibnodes   R: reset')
     for i in range(len(ibperf_counters)):
-      subwin.addstr(5+i, 2, '%c: toggle %s' % (chr(97+i), ibperf_counters[i]))
+      subwin.addstr(5+i, 2, f'{chr(97 + i):c}: toggle {ibperf_counters[i]}')
   else:
     subwin = screen.subwin(1, screen_x, 0, 0)
     subwin.clear()
@@ -1186,9 +1183,9 @@ def display_perfquery(screen, perf_counters, ibperf_counter, firstfield,
   field_len = {}
   for key in ibperf_counter:
     if key in ['Guid']:
-      items = [('0x%016x' % perf[key]) for perf in perf_counters]
+      items = [f'0x{perf[key]:016x}' for perf in perf_counters]
     else:
-      items = [('%s' % perf[key]) for perf in perf_counters]
+      items = [f'{perf[key]}' for perf in perf_counters]
     field_len[key] = max(len(item) for item in items)
     # replace 'PortSelect' with 'Port'
     if key in ['PortSelect']:
@@ -1210,10 +1207,10 @@ def display_perfquery(screen, perf_counters, ibperf_counter, firstfield,
         start_x += field_len[ibperf_counter[i]] + 1
 
       if key in ['Guid']:
-        text_line += ' 0x%016x' % (perf_counter[key])
+        text_line += f' 0x{perf_counter[key]:016x}'
         if start_y < screen_y and (start_x+field_len[key]) < screen_x and \
           not batch:
-          screen.addstr(start_y, start_x, '0x%016x' % (perf_counter[key]))
+          screen.addstr(start_y, start_x, f'0x{perf_counter[key]:016x}')
       elif key in ibperf_errs and perf_counter[key] >= \
         ibperf_errs_threshold[key]:
         text_line += ' %*s' % (field_len[key], perf_counter[key])
@@ -1310,7 +1307,7 @@ def help(myname):
   """
   Help page.
   """
-  print('Usage: %s [options]' % myname)
+  print(f'Usage: {myname} [options]')
   print('  -a, --showall             show all ibnodes when checking errors')
   print('  -A, --and                 use "and" operator instead of "or" (default) on target selection')
   print('  -b, --batch               batch mode')
@@ -1339,7 +1336,7 @@ def help(myname):
   print('  -s, --speed <SPEED>       query one or more SPEEDs [SDR|DDR|QDR|FDR|EDR|HDR|NDR|XDR] (comma separated)')
   print('  -S, --spine <SPINE>       query one or more SPINEs (comma separated)')
   print('  -t, --topo <TOPOFILE>     topology file')
-  print('  -T, --type <TYPE>         query one or more TYPEs %s (comma separated)' % ibnode_type)
+  print(f'  -T, --type <TYPE>         query one or more TYPEs {ibnode_type} (comma separated)')
   print('  -v, --verbose             verbose output')
   print('  -w, --width <WIDTH>       query one or more WIDTHes [1|2|4] (comma separated)')
 
@@ -1396,7 +1393,7 @@ def main(myname, argv):
                   'reset', 'route', 'speed=', 'spine=', 'topo=', 'type=',
                   'verbose', 'width='])
   except getopt.GetoptError:
-    warning('Invalid arguments: %s\n' % argv)
+    warning(f'Invalid arguments: {argv}\n')
     help(myname)
     sys.exit(2)
 
@@ -1426,14 +1423,14 @@ def main(myname, argv):
       if WITH_PYDOT:
         graph_file = val
       else:
-        warning('\'pydot\' is not imported, ignore \'%s %s\'' % (opt, val))
+        warning(f'\'pydot\' is not imported, ignore \'{opt} {val}\'')
     elif opt in ['-H', '--hca']:
         hca = val
     elif opt in ['-i', '--interval']:
       try:
         interval = int(val)
       except ValueError:
-        warning('%s is not a valid interval value' % val)
+        warning(f'{val} is not a valid interval value')
     elif opt in ['-l', '--lid']:
       dest_lid = sorted(int(x) for x in val.split(','))
     elif opt in ['-L', '--leaf', '--line']:
@@ -1444,19 +1441,19 @@ def main(myname, argv):
       try:
         iteration = int(val)
       except ValueError:
-        warning('%s is not a valid iteration number' % val)
+        warning(f'{val} is not a valid iteration number')
     elif opt in ['-N', '--nodedesc']:
       dest_nodedesc = sorted(x.strip() for x in val.split(','))
     elif opt in ['-O', '--timeout']:
       try:
         timeout = int(val)
       except ValueError:
-        warning('%s is not a valid timeout value' % val)
+        warning(f'{val} is not a valid timeout value')
     elif opt in ['-p', '--parallel']:
       try:
         threads = int(val)
       except ValueError:
-        warning('%s is not a valid thread number' % val)
+        warning(f'{val} is not a valid thread number')
       if threads <= 0:
         threads = 1
     elif opt in ['-P', '--port']:
@@ -1480,7 +1477,7 @@ def main(myname, argv):
       try:
         dest_width = sorted(int(x) for x in val.split(','))
       except ValueError:
-        warning('%s is not a valid width' % val)
+        warning(f'{val} is not a valid width')
 
   # read fabric config file
   if config_file:
@@ -1492,12 +1489,12 @@ def main(myname, argv):
       info('Running ibnetdiscover ...')
 
     if hca:
-      cmd = 'ibnetdiscover -C %s' % hca
+      cmd = f'ibnetdiscover -C {hca}'
     else:
       cmd = 'ibnetdiscover'
 
     if not WITH_ROOT:
-      cmd = 'sudo %s' % cmd
+      cmd = f'sudo {cmd}'
 
     topo_string= run_cmd(cmd)['retstr'] + '\n'
 
@@ -1507,11 +1504,11 @@ def main(myname, argv):
   # read from pre-defined topology file
   if topo_file:
     if verbose:
-      info('Reading topology file %s ...' % topo_file)
+      info(f'Reading topology file {topo_file} ...')
     try:
       assert_file(topo_file)
     except RuntimeError:
-      error('Failed to read from %s' % topo_file)
+      error(f'Failed to read from {topo_file}')
     defined_topo_string= read_file(topo_file) + '\n'
     defined_ibnodes, defined_ibnodes_index, defined_links = parse_topology(
       defined_topo_string, guid_desc_mapping, '', True, verbose)
@@ -1669,7 +1666,7 @@ def main(myname, argv):
           (each['tag'], each['guid'], each['lid'], each['activity'],
           each['priority'], each['state'], each['desc'])
     print(line[:-1])
-    print('%d Subnet Managers found' % len(sminfo))
+    print(f'{len(sminfo)} Subnet Managers found')
     print('%.2f seconds spent on fetching %d ibnodes for Subnet Manager info' %
       ((end-start), len(tgt_guid)))
 
