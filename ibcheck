@@ -1611,7 +1611,7 @@ def main(myname, argv):
     line = display_ibnode(ibnodes[guid], detail, verbose)
     if line:
       print(line)
-  print('%d found\n' % count)
+  print(f'{count} found\n')
 
   # plot topology
   if graph_file:
@@ -1672,8 +1672,7 @@ def main(myname, argv):
           each['priority'], each['state'], each['desc'])
     print(line[:-1])
     print(f'{len(sminfo)} Subnet Managers found')
-    print('%.2f seconds spent on fetching %d ibnodes for Subnet Manager info' %
-      ((end-start), len(tgt_guid)))
+    print(f'{end - start:.2f} seconds spent on fetching {len(tgt_guid)} ibnodes for Subnet Manager info')
 
   # check errors
   if check_error:
