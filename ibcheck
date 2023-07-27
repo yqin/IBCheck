@@ -986,8 +986,8 @@ def sminfo_threading(input_queue, hca, output_queue):
   """
   Collecting SM info in parallel.
   """
-  for ibnode, verbose in iter(input_queue.get, 'STOP'):
-    output_queue.put(sminfo(ibnode, hca,  verbose))
+  for ibnode, _, verbose in iter(input_queue.get, 'STOP'):
+    output_queue.put(sminfo(ibnode, hca, verbose))
 
 
 def parse_sminfo(lines, desc, verbose=False):
@@ -1645,7 +1645,7 @@ def main(myname, argv):
 
     # start threads, put results in output queue
     for i in range(len(tgt_guid)):
-      threading.Thread(target=sminfo_threading, args=(sminfo_input_queue, \
+      threading.Thread(target=sminfo_threading, args=(sminfo_input_queue, hca, \
         sminfo_output_queue)).start()
 
     # send 'STOP' signal to all threads
