@@ -321,7 +321,7 @@ ibperf_errs_threshold = {'ExcBufOverrunErrors' : 10,
 
 
 # functions
-def error(message, errcode = -1):
+def error(message, errcode=-1):
   """
   Print the error message and exit with an error code.
   """
@@ -363,8 +363,8 @@ def run_cmd(cmd):
   """
   retvalue = {}
   try:
-    p = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE,
-                         stderr = subprocess.STDOUT)
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT)
   except OSError as exc:
     exc.args = ['Can not run \"%s\"']
     raise
@@ -486,13 +486,13 @@ def parse_topology(topo_string, guid_desc_mapping, hca='', dryrun=False, verbose
       if type in ['Spine', 'Leaf', 'Line']:
         try:
           ibnodes_index['type'][type].sort(
-            key = lambda guid: int(ibnodes[guid]['typeindex']))
+            key=lambda guid: int(ibnodes[guid]['typeindex']))
         except ValueError:
           ibnodes_index['type'][type].sort(
-            key = lambda guid: ibnodes[guid]['typeindex'])
+            key=lambda guid: ibnodes[guid]['typeindex'])
       else:
         ibnodes_index['type'][type].sort(
-          key = lambda guid: ibnodes[guid]['desc'])
+          key=lambda guid: ibnodes[guid]['desc'])
 
   # parse all ibnodes to construct link graph
   for ibnode in list(ibnodes.values()):
@@ -693,7 +693,7 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
 
   # sort all ports based on their port number
   if ibports:
-    ibports.sort(key = lambda ibport: ibport['port'])
+    ibports.sort(key=lambda ibport: ibport['port'])
 
   return ibports
 
@@ -710,9 +710,9 @@ def query_ibnode(ibnodes_index, dest_list, cat_list, re_string, verbose=False):
   for dest in dest_list:
     for cat in cat_list:
       for key in [x for x in list(ibnodes_index[cat].keys()) if x is not None]:
-        if ((cat in ['desc', 'nodedesc', 'speed', 'type']) and \
+        if ((cat in ['desc', 'nodedesc', 'speed', 'type']) and
              (re.search(re_string % dest, key, re.I))) or \
-           ((cat in ['nodeguid', 'nodelid', 'portguid', 'portlid', 'width']) and \
+           ((cat in ['nodeguid', 'nodelid', 'portguid', 'portlid', 'width']) and
              (dest == key)):
           for guid in ibnodes_index[cat][key]:
             tgt_guid.append(guid)
@@ -800,12 +800,12 @@ def compare_components(ibnodes, ibnodes_index1, ibnodes_index2, detail, defined_
         if type in ['Spine', 'Leaf', 'Line']:
           try:
             delta = sorted(list(delta),
-                      key = lambda guid: int(ibnodes[guid]['typeindex']))
+                      key=lambda guid: int(ibnodes[guid]['typeindex']))
           except ValueError:
             delta = sorted(list(delta),
-                      key = lambda guid: ibnodes[guid]['typeindex'])
+                      key=lambda guid: ibnodes[guid]['typeindex'])
         else:
-          delta = sorted(list(delta), key = lambda guid: ibnodes[guid]['desc'])
+          delta = sorted(list(delta), key=lambda guid: ibnodes[guid]['desc'])
 
         for guid in delta:
           # only output the 1st level of detail
@@ -954,7 +954,7 @@ def sminfo(ibnode, hca='', verbose=False):
     cmd = 'sminfo'
 
   if WITH_ROOT:
-    cmd = cmd +' -G %s'
+    cmd = cmd + ' -G %s'
   else:
     cmd = 'sudo ' + cmd + ' -G %s'
 
@@ -1173,7 +1173,7 @@ def display_perfquery(screen, perf_counters, ibperf_counter, firstfield,
     (screen_y, screen_x) = (1000000, 1000000)
 
   # sort results
-  perf_counters.sort(key = lambda perf: (perf['NodeDesc'], perf['PortSelect']))
+  perf_counters.sort(key=lambda perf: (perf['NodeDesc'], perf['PortSelect']))
 
   # define output fields
   ibperf_counter = ['NodeDesc', 'PortSelect', 'Guid'] + \
@@ -1195,7 +1195,7 @@ def display_perfquery(screen, perf_counters, ibperf_counter, firstfield,
 
   # redefine perf_counters only to current screen
   if not batch:
-    perf_counters = perf_counters[page * (screen_y - offset_y - 1) :
+    perf_counters = perf_counters[page * (screen_y - offset_y - 1):
       (page + 1) * (screen_y - offset_y - 1)]
 
   count = 0
@@ -1496,7 +1496,7 @@ def main(myname, argv):
     if not WITH_ROOT:
       cmd = f'sudo {cmd}'
 
-    topo_string= run_cmd(cmd)['retstr'] + '\n'
+    topo_string = run_cmd(cmd)['retstr'] + '\n'
 
     ibnodes, ibnodes_index, links = parse_topology(topo_string,
       guid_desc_mapping, hca, dryrun, verbose)
@@ -1509,7 +1509,7 @@ def main(myname, argv):
       assert_file(topo_file)
     except RuntimeError:
       error(f'Failed to read from {topo_file}')
-    defined_topo_string= read_file(topo_file) + '\n'
+    defined_topo_string = read_file(topo_file) + '\n'
     defined_ibnodes, defined_ibnodes_index, defined_links = parse_topology(
       defined_topo_string, guid_desc_mapping, '', True, verbose)
     if dryrun:
@@ -1531,16 +1531,20 @@ def main(myname, argv):
   if topo_file:
     line = compare_components(defined_ibnodes, defined_ibnodes_index,
       ibnodes_index, detail, True, verbose)
-    if line: print(line[:-1])
+    if line:
+      print(line[:-1])
     line = compare_components(ibnodes, ibnodes_index, defined_ibnodes_index,
       detail, False, verbose)
-    if line: print(line[:-1])
+    if line:
+      print(line[:-1])
 
     # compare link graphs
     line = compare_links(defined_ibnodes, defined_links, links, True, verbose)
-    if line: print(line)
+    if line:
+      print(line)
     line = compare_links(ibnodes, links, defined_links, False, verbose)
-    if line: print(line)
+    if line:
+      print(line)
 
   # query fabric
   if ibnodes_index:
@@ -1587,7 +1591,7 @@ def main(myname, argv):
           tgt_guid[0] = set(tgt_guid[0]) | set(each)
 
       tgt_guid = sorted(uniq_list(tgt_guid[0]),
-        key = lambda guid: ibnodes[guid]['desc'])
+        key=lambda guid: ibnodes[guid]['desc'])
 
   # if no query, output all components found
   if not (dest_cluster or dest_guid or dest_lid or dest_nodedesc or dest_speed
@@ -1605,7 +1609,8 @@ def main(myname, argv):
 
   for guid in tgt_guid:
     line = display_ibnode(ibnodes[guid], detail, verbose)
-    if line: print(line)
+    if line:
+      print(line)
   print('%d found\n' % count)
 
   # plot topology
@@ -1659,7 +1664,7 @@ def main(myname, argv):
 
     print('Subnet Manager info:')
     line = ''
-    sminfo.sort(key = lambda sm: (sm['tag'], sm['desc']))
+    sminfo.sort(key=lambda sm: (sm['tag'], sm['desc']))
     for each in sminfo:
       if each:
         line += '  %-14s: guid 0x%016x lid %4d activity %10d priority %2d state %2d [%s]\n' % \
@@ -1734,7 +1739,7 @@ def main(myname, argv):
         # filter results
         ports_scanned = len(perf_counters)
         perf_counters = filter_perfquery(perf_counters, showall, verbose)
-        ports_showed  = len(perf_counters)
+        ports_showed = len(perf_counters)
 
         # recalculate max pages
         if not batch:
@@ -1770,7 +1775,7 @@ def main(myname, argv):
             elif input in [ord(','), curses.KEY_RIGHT] and firstfield < \
               len(ibperf_counter):
               firstfield += 1
-            elif input in [ord('.'), curses.KEY_LEFT] and firstfield > 0: \
+            elif input in [ord('.'), curses.KEY_LEFT] and firstfield > 0:
               firstfield -= 1
             elif input in [ord(' ')]:
               showall = not showall
