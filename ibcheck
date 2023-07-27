@@ -227,13 +227,13 @@ __author__ = "Yong Qin <yong.qin@lbl.gov>"
 __date__ = "September 14, 2012"
 __version__ = "0.1"
 
-import ConfigParser
+import configparser
 import curses
 import datetime
 import getopt
 import os
 import pydoc
-import Queue
+import queue
 import re
 import signal
 import subprocess
@@ -247,7 +247,7 @@ try:
   import pydot
   WITH_PYDOT = True
 except ImportError:
-  print >> sys.stderr, 'Warning: Cannot import \'pydot\''
+  print('Warning: Cannot import \'pydot\'', file=sys.stderr)
   WITH_PYDOT = False
 
 # root
@@ -278,28 +278,28 @@ ibperf_data = ['MulticastRcvPkts', 'MulticastXmitPkts', 'RcvData', 'RcvPkts', \
 ibperf_errs = ibperf_err1 + ibperf_err2
 ibperf_counters = ibperf_errs + ibperf_data
 ibperf_hash = { \
-               'ExcessiveBufferOverrunErrors' : 'ExcBufOverrunErrors', \
-               'LinkDownedCounter'            : 'LinkDowned', \
-               'LinkErrorRecoveryCounter'     : 'LinkRecovers', \
-               'LocalLinkIntegrityErrors'     : 'LinkIntegrityErrors', \
-               'PortMulticastRcvPkts'         : 'MulticastRcvPkts', \
-               'PortMulticastXmitPkts'        : 'MulticastXmitPkts', \
-               'PortRcvConstraintErrors'      : 'RcvConstraintErrors', \
-               'PortRcvData'                  : 'RcvData', \
-               'PortRcvErrors'                : 'RcvErrors', \
-               'PortRcvPkts'                  : 'RcvPkts', \
-               'PortRcvRemotePhysicalErrors'  : 'RcvRemotePhysErrors', \
-               'PortRcvSwitchRelayErrors'     : 'RcvSwRelayErrors', \
-               'PortUnicastRcvPkts'           : 'UnicastRcvPkts', \
-               'PortUnicastXmitPkts'          : 'UnicastXmitPkts', \
-               'PortXmitConstraintErrors'     : 'XmtConstraintErrors', \
-               'PortXmitData'                 : 'XmtData', \
-               'PortXmitDiscards'             : 'XmtDiscards', \
-               'PortXmitPkts'                 : 'XmtPkts', \
-               'PortXmitWait'                 : 'XmtWait', \
-               'QP1Dropped'                   : 'QP1Dropped', \
-               'SymbolErrorCounter'           : 'SymbolErrors', \
-               'VL15Dropped'                  : 'VL15Dropped', \
+               'ExcessiveBufferOverrunErrors': 'ExcBufOverrunErrors', \
+               'LinkDownedCounter': 'LinkDowned', \
+               'LinkErrorRecoveryCounter': 'LinkRecovers', \
+               'LocalLinkIntegrityErrors': 'LinkIntegrityErrors', \
+               'PortMulticastRcvPkts': 'MulticastRcvPkts', \
+               'PortMulticastXmitPkts': 'MulticastXmitPkts', \
+               'PortRcvConstraintErrors': 'RcvConstraintErrors', \
+               'PortRcvData': 'RcvData', \
+               'PortRcvErrors': 'RcvErrors', \
+               'PortRcvPkts': 'RcvPkts', \
+               'PortRcvRemotePhysicalErrors': 'RcvRemotePhysErrors', \
+               'PortRcvSwitchRelayErrors': 'RcvSwRelayErrors', \
+               'PortUnicastRcvPkts': 'UnicastRcvPkts', \
+               'PortUnicastXmitPkts': 'UnicastXmitPkts', \
+               'PortXmitConstraintErrors': 'XmtConstraintErrors', \
+               'PortXmitData': 'XmtData', \
+               'PortXmitDiscards': 'XmtDiscards', \
+               'PortXmitPkts': 'XmtPkts', \
+               'PortXmitWait': 'XmtWait', \
+               'QP1Dropped': 'QP1Dropped', \
+               'SymbolErrorCounter': 'SymbolErrors', \
+               'VL15Dropped': 'VL15Dropped', \
               }
 
 # thresholds for performance counters (ibperf_err1 + ibperf_err2)
@@ -325,7 +325,7 @@ def error(message, errcode = -1):
   """
   Print the error message and exit with an error code.
   """
-  print >> sys.stderr, 'Error: %s' % (message)
+  print('Error: %s' % (message), file=sys.stderr)
   sys.exit(errcode)
 
 
@@ -333,14 +333,14 @@ def warning(message):
   """
   Print the warning message.
   """
-  print >> sys.stderr, 'Warning: %s' % (message)
+  print('Warning: %s' % (message), file=sys.stderr)
 
 
 def info(message):
   """
   Print the info message.
   """
-  print >> sys.stderr, 'Info: %s' % (message)
+  print('Info: %s' % (message), file=sys.stderr)
 
 
 def cpu_number():
@@ -365,11 +365,13 @@ def run_cmd(cmd):
   try:
     p = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE, \
                          stderr = subprocess.STDOUT)
-  except OSError, exc:
+  except OSError as exc:
     exc.args = ['Can not run \"%s\"']
     raise
-  retvalue['retstr'] = p.stdout.read()
-  retvalue['retval'] = p.wait()
+  stdout = p.stdout.read().decode('utf-8')
+  retval = p.wait()
+  retvalue['retstr'] = stdout
+  retvalue['retval'] = retval
   return retvalue
 
 
@@ -378,7 +380,7 @@ def assert_file(file):
   Assert if file does not exist.
   """
   if not os.path.isfile(file):
-    raise RuntimeError, 'Can not find file \"%s\"' % file
+    raise RuntimeError('Can not find file \"%s\"' % file)
 
 
 def read_file(file):
@@ -392,7 +394,7 @@ def read_file(file):
     lines = out.read()
     out.close()
   except:
-    raise RuntimeError, 'Failed to read from \"%s\"' % file
+    raise RuntimeError('Failed to read from \"%s\"' % file)
   return lines
 
 
@@ -403,7 +405,7 @@ def uniq_list(seq):
   keys = {}
   for each in seq:
     keys[each] = 1
-  return keys.keys()
+  return list(keys.keys())
 
 
 def parse_config(config_file, clusters, verbose=False):
@@ -420,7 +422,7 @@ def parse_config(config_file, clusters, verbose=False):
 
   guid_desc_mapping = {}
 
-  config = ConfigParser.SafeConfigParser()
+  config = configparser.SafeConfigParser()
   config.read(config_file)
   config_clusters = config.sections()
 
@@ -480,7 +482,7 @@ def parse_topology(topo_string, guid_desc_mapping, hca='', dryrun=False, verbose
 
   # sort each sub-category in ibnodes_index['type']
   if ibnodes_index:
-    for type in ibnodes_index['type'].keys():
+    for type in list(ibnodes_index['type'].keys()):
       if type in ['Spine', 'Leaf', 'Line']:
         try:
           ibnodes_index['type'][type].sort( \
@@ -493,7 +495,7 @@ def parse_topology(topo_string, guid_desc_mapping, hca='', dryrun=False, verbose
           key = lambda guid: ibnodes[guid]['desc'])
 
   # parse all ibnodes to construct link graph
-  for ibnode in ibnodes.values():
+  for ibnode in list(ibnodes.values()):
     for ibport in ibnode['nodeports']:
       guid = ibnode['nodeguid']
       port = ibport['port']
@@ -535,7 +537,7 @@ def parse_ibnode(block, guid_desc_mapping, hca='', dryrun=False, verbose=False):
 
   node_match = node_pattern.match(block)
   if node_match:
-    for key in node_pattern.groupindex.keys():
+    for key in list(node_pattern.groupindex.keys()):
       ibnode[key] = node_match.group(key)
     ibnode['nodedesc'] = ibnode['nodedesc'].strip()
 
@@ -631,7 +633,7 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
     ibport = {}
     port_match = port_pattern.match(port)
     if port_match:
-      for key in port_pattern.groupindex.keys():
+      for key in list(port_pattern.groupindex.keys()):
         ibport[key] = port_match.group(key)
       ibport['tonodedesc'] = ibport['tonodedesc'].strip()
 
@@ -649,7 +651,7 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
           ibport['port%s' % key] = ibnode['node%s' % key]
       for key in ['port', 'portguid', 'tonodeguid', 'tonodeport', \
                   'toportguid', 'portlid', 'portlmc', 'toportlid', 'width']:
-        if key and (type(ibport[key]) is type('')):
+        if key and (isinstance(ibport[key], type(''))):
           ibport[key] = int(ibport[key], 0)
 
       # ibport['todesc'] is the redefined tonodedesc
@@ -667,7 +669,7 @@ def parse_ports(ibnode, guid_desc_mapping, verbose=False):
   for port in range(1, ibnode['portcount']+1):
     if port not in [ibport['port'] for ibport in ibports]:
       ibport = {}
-      for key in port_pattern.groupindex.keys():
+      for key in list(port_pattern.groupindex.keys()):
         if key in ['port']:
           ibport[key] = port
         elif key in ['portguid']:
@@ -707,7 +709,7 @@ def query_ibnode(ibnodes_index, dest_list, cat_list, re_string, verbose=False):
   tgt_guid = []
   for dest in dest_list:
     for cat in cat_list:
-      for key in [x for x in ibnodes_index[cat].keys() if x is not None]:
+      for key in [x for x in list(ibnodes_index[cat].keys()) if x is not None]:
         if ((cat in ['desc', 'nodedesc', 'speed', 'type']) and \
              (re.search(re_string % dest, key, re.I))) or \
            ((cat in ['nodeguid', 'nodelid', 'portguid', 'portlid', 'width']) \
@@ -780,7 +782,7 @@ def compare_components(ibnodes, ibnodes_index1, ibnodes_index2, detail, defined_
   line = ''
 
   if 'type' in ibnodes_index1:
-    for type in ibnodes_index1['type'].keys():
+    for type in list(ibnodes_index1['type'].keys()):
       try:
         delta = set(ibnodes_index1['type'][type]) - \
                 set(ibnodes_index2['type'][type])
@@ -938,7 +940,7 @@ def ibtracert(ibnode1, ibnode2, hca='', verbose=False):
       else:
         text_line += '  No route from %s to %s\n' % (ibnode1['nodedesc'], \
                      ibnode2['nodedesc'])
-  print text_line[:-1]
+  print(text_line[:-1])
 
 
 def sminfo(ibnode, hca='', verbose=False):
@@ -975,7 +977,7 @@ def sminfo(ibnode, hca='', verbose=False):
   if verbose:
     for line in ret_lines.split('\n'):
       text_line += '  %s\n' % line
-    print text_line[:-1]
+    print(text_line[:-1])
 
   return sminfo
 
@@ -985,7 +987,7 @@ def sminfo_threading(input_queue, hca, output_queue):
   Collecting SM info in parallel.
   """
   for ibnode, verbose in iter(input_queue.get, 'STOP'):
-    output_queue.put(sminfo(ibnode,hca,  verbose))
+    output_queue.put(sminfo(ibnode, hca,  verbose))
 
 
 def parse_sminfo(lines, desc, verbose=False):
@@ -1062,7 +1064,7 @@ def perfquery(ibnode, reset, detail, hca='', verbose=False):
   if verbose:
     for line in ret_lines.split('\n'):
       text_line += '  %s\n' % line
-    print text_line[:-1]
+    print(text_line[:-1])
 
   return perf_counters
 
@@ -1308,38 +1310,38 @@ def help(myname):
   """
   Help page.
   """
-  print 'Usage: %s [options]' % myname
-  print '  -a, --showall             show all ibnodes when checking errors'
-  print '  -A, --and                 use "and" operator instead of "or" (default) on target selection'
-  print '  -b, --batch               batch mode'
-  print '  -c, --config <CONFIG>     fabric config file (same as -f)'
-  print '  -C, --cluster <CLUSTER>   cluster(s) to be queried (comma separated)'
-  print '  -d, --detail              detail level (-d, -dd, -ddd)'
-  print '  -D, --dryrun              dryrun to test topology, use with -t'
-  print '  -E, --error               check errors'
-  print '  -f, --fabric <CONFIG>     fabric config file (same as -c)'
-  print '  -g, --guid <GUID>         query one or more GUIDs (comma separated)'
-  print '  -G, --graph <GRAPH>       plot topology with graphviz and output to <GRAPH>'
-  print '  -h, --help                this help page'
-  print '  -H, --hca                 HCA to use'
-  print '  -i, --interval            scan interval to check errors (seconds)'
-  print '  -l, --lid <LID>           query one or more LIDs (comma separated)'
-  print '  -L, --leaf <LEAF>         query one or more LEAFs (comma separated)'
-  print '      --line <LINE>         query one or more LINE CARDs (comma separated)'
-  print '  -M, --sminfo              check subnet managers'
-  print '  -n, --iteration           number of iterations'
-  print '  -N, --nodedesc <NODEDESC> query one or more NODEDESCs (comma separated)'
-  print '  -O, --timeout <TIMEOUT>   timeout value for scanning fabric (seconds, default is 3 seconds)'
-  print '  -p, --parallel <THREADS>  number of threads for parallel processing'
-  print '  -P, --port <PORT>         query one or more ports (comma separated)'
-  print '  -r, --reset               reset error counters once'
-  print '  -R, --route               query routing info'
-  print '  -s, --speed <SPEED>       query one or more SPEEDs [SDR|DDR|QDR|FDR|EDR|HDR|NDR|XDR] (comma separated)'
-  print '  -S, --spine <SPINE>       query one or more SPINEs (comma separated)'
-  print '  -t, --topo <TOPOFILE>     topology file'
-  print '  -T, --type <TYPE>         query one or more TYPEs %s (comma separated)' % ibnode_type
-  print '  -v, --verbose             verbose output'
-  print '  -w, --width <WIDTH>       query one or more WIDTHes [1|2|4] (comma separated)'
+  print('Usage: %s [options]' % myname)
+  print('  -a, --showall             show all ibnodes when checking errors')
+  print('  -A, --and                 use "and" operator instead of "or" (default) on target selection')
+  print('  -b, --batch               batch mode')
+  print('  -c, --config <CONFIG>     fabric config file (same as -f)')
+  print('  -C, --cluster <CLUSTER>   cluster(s) to be queried (comma separated)')
+  print('  -d, --detail              detail level (-d, -dd, -ddd)')
+  print('  -D, --dryrun              dryrun to test topology, use with -t')
+  print('  -E, --error               check errors')
+  print('  -f, --fabric <CONFIG>     fabric config file (same as -c)')
+  print('  -g, --guid <GUID>         query one or more GUIDs (comma separated)')
+  print('  -G, --graph <GRAPH>       plot topology with graphviz and output to <GRAPH>')
+  print('  -h, --help                this help page')
+  print('  -H, --hca                 HCA to use')
+  print('  -i, --interval            scan interval to check errors (seconds)')
+  print('  -l, --lid <LID>           query one or more LIDs (comma separated)')
+  print('  -L, --leaf <LEAF>         query one or more LEAFs (comma separated)')
+  print('      --line <LINE>         query one or more LINE CARDs (comma separated)')
+  print('  -M, --sminfo              check subnet managers')
+  print('  -n, --iteration           number of iterations')
+  print('  -N, --nodedesc <NODEDESC> query one or more NODEDESCs (comma separated)')
+  print('  -O, --timeout <TIMEOUT>   timeout value for scanning fabric (seconds, default is 3 seconds)')
+  print('  -p, --parallel <THREADS>  number of threads for parallel processing')
+  print('  -P, --port <PORT>         query one or more ports (comma separated)')
+  print('  -r, --reset               reset error counters once')
+  print('  -R, --route               query routing info')
+  print('  -s, --speed <SPEED>       query one or more SPEEDs [SDR|DDR|QDR|FDR|EDR|HDR|NDR|XDR] (comma separated)')
+  print('  -S, --spine <SPINE>       query one or more SPINEs (comma separated)')
+  print('  -t, --topo <TOPOFILE>     topology file')
+  print('  -T, --type <TYPE>         query one or more TYPEs %s (comma separated)' % ibnode_type)
+  print('  -v, --verbose             verbose output')
+  print('  -w, --width <WIDTH>       query one or more WIDTHes [1|2|4] (comma separated)')
 
 
 def main(myname, argv):
@@ -1519,29 +1521,29 @@ def main(myname, argv):
       links = defined_links
 
   # output total components found on the fabric
-  print count_components(ibnodes_index, verbose) + 'found on the fabric'
+  print(count_components(ibnodes_index, verbose) + 'found on the fabric')
 
   # output total components found, and comparison
   if topo_file:
-    print count_components(defined_ibnodes_index, verbose) + \
-      'found in the topology file'
+    print(count_components(defined_ibnodes_index, verbose) + \
+      'found in the topology file')
 
-  print
+  print()
 
   # compare topologies
   if topo_file:
     line = compare_components(defined_ibnodes, defined_ibnodes_index, \
       ibnodes_index, detail, True, verbose)
-    if line: print line[:-1]
+    if line: print(line[:-1])
     line = compare_components(ibnodes, ibnodes_index, defined_ibnodes_index, \
       detail, False, verbose)
-    if line: print line[:-1]
+    if line: print(line[:-1])
 
     # compare link graphs
     line = compare_links(defined_ibnodes, defined_links, links, True, verbose)
-    if line: print line
+    if line: print(line)
     line = compare_links(ibnodes, links, defined_links, False, verbose)
-    if line: print line
+    if line: print(line)
 
   # query fabric
   if ibnodes_index:
@@ -1593,21 +1595,21 @@ def main(myname, argv):
   # if no query, output all components found
   if not (dest_cluster or dest_guid or dest_lid or dest_nodedesc or dest_speed \
     or dest_width or dest_type or dest_spine or dest_leaf):
-    print 'fabric topology:'
+    print('fabric topology:')
     for type in ibnode_type:
       try:
         tgt_guid.extend(ibnodes_index['type'][type])
       except KeyError:
         pass
   else:
-    print 'Query results:'
+    print('Query results:')
 
   count = len(tgt_guid)
 
   for guid in tgt_guid:
     line = display_ibnode(ibnodes[guid], detail, verbose)
-    if line: print line
-  print '%d found\n' % count
+    if line: print(line)
+  print('%d found\n' % count)
 
   # plot topology
   if graph_file:
@@ -1623,19 +1625,19 @@ def main(myname, argv):
       warning('More than 2 end points found, will use the first two to retrive routing info')
     if count < 2:
       error('Less than 2 end points found, not able to retrieve routing info')
-    print 'Routing info:'
+    print('Routing info:')
     ibtracert(ibnodes[tgt_guid[0]], ibnodes[tgt_guid[1]], hca, verbose)
 
   # check sminfo
   if check_sm:
     sminfo = []
-    print 'Scanning fabric ...'
+    print('Scanning fabric ...')
 
     # start threading
     start = time.time()
     nointerrupt = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    sminfo_input_queue = Queue.Queue()
-    sminfo_output_queue = Queue.Queue()
+    sminfo_input_queue = queue.Queue()
+    sminfo_output_queue = queue.Queue()
 
     # creating input queue for threading
     for guid in tgt_guid:
@@ -1658,7 +1660,7 @@ def main(myname, argv):
     signal.signal(signal.SIGINT, nointerrupt)
     end = time.time()
 
-    print 'Subnet Manager info:'
+    print('Subnet Manager info:')
     line = ''
     sminfo.sort(key = lambda sm: (sm['tag'], sm['desc']))
     for each in sminfo:
@@ -1666,10 +1668,10 @@ def main(myname, argv):
         line += '  %-14s: guid 0x%016x lid %4d activity %10d priority %2d state %2d [%s]\n' % \
           (each['tag'], each['guid'], each['lid'], each['activity'], \
           each['priority'], each['state'], each['desc'])
-    print line[:-1]
-    print '%d Subnet Managers found' % len(sminfo)
-    print '%.2f seconds spent on fetching %d ibnodes for Subnet Manager info' % \
-      ((end-start), len(tgt_guid))
+    print(line[:-1])
+    print('%d Subnet Managers found' % len(sminfo))
+    print('%.2f seconds spent on fetching %d ibnodes for Subnet Manager info' % \
+      ((end-start), len(tgt_guid)))
 
   # check errors
   if check_error:
@@ -1696,13 +1698,13 @@ def main(myname, argv):
             'page %d/%d' % (page, maxpage))
           screen.refresh()
         else:
-          print 'Scanning fabric ...'
+          print('Scanning fabric ...')
 
         # start threading
         start = time.time()
         nointerrupt = signal.signal(signal.SIGINT, signal.SIG_IGN)
-        perfquery_input_queue = Queue.Queue()
-        perfquery_output_queue = Queue.Queue()
+        perfquery_input_queue = queue.Queue()
+        perfquery_output_queue = queue.Queue()
 
         # creating input queue for threading
         for guid in tgt_guid:
@@ -1724,7 +1726,7 @@ def main(myname, argv):
         for i in range(len(tgt_guid)):
           try:
             perf_counters.extend(perfquery_output_queue.get(timeout=timeout))
-          except Queue.Empty:
+          except queue.Empty:
             warning('Not all ports returned before timeout')
             pass
 
@@ -1744,7 +1746,7 @@ def main(myname, argv):
         # capture keyboard inputs
         if not batch:
           # define keymap for 'a-z'
-          keymap = range(97, 97 + len(ibperf_counters))
+          keymap = list(range(97, 97 + len(ibperf_counters)))
           input = screen.getch()
           while input != -1:
             if input in [ord('Q'), 27]:
@@ -1790,9 +1792,9 @@ def main(myname, argv):
           screen.addstr(1, 0, '%.2f seconds spent on scanning %d ibnodes (%s)' % \
             ((end-start), len(tgt_guid), datetime.datetime.now()))
         else:
-          print 'Performace counter info:'
-          print '%.2f seconds spent on scanning %d ibnodes (%s)' % ((end-start), \
-            len(tgt_guid), datetime.datetime.now())
+          print('Performace counter info:')
+          print('%.2f seconds spent on scanning %d ibnodes (%s)' % ((end-start), \
+            len(tgt_guid), datetime.datetime.now()))
 
         # display performance counters
         if perf_counters:
@@ -1815,7 +1817,7 @@ def main(myname, argv):
           screen.addstr(2, 0, perf_counters_line)
           screen.refresh()
         else:
-          print perf_counters_line
+          print(perf_counters_line)
 
         # break after a certain iterations if running in batch mode
         if batch:
